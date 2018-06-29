@@ -1,0 +1,36 @@
+{
+  "name": "shop",
+  "version": "1.0.0",
+  "description": "### Setup",
+  "main": "main.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "start": "npm run build && dev_appserver.py .",
+    "preinstall": "bower install && git submodule init && git submodule update && pip install -t lib -r requirements.txt",
+    "build": "polymer build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agektmr/shop.git"
+  },
+  "author": "",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/agektmr/shop/issues"
+  },
+  "homepage": "https://github.com/agektmr/shop#readme",
+  "dependencies": {
+    "@google-cloud/datastore": "^1.4.1",
+    "body-parser": "^1.18.3",
+    "brcrypt": "^1.0.7",
+    "express": "^4.16.3",
+    "fs": "0.0.1-security",
+    "hbs": "^4.0.1",
+    "path": "^0.12.7",
+    "request": "^2.87.0"
+  }
+}
