@@ -1,0 +1,4 @@
+{
+  "GCLOUD_PROJECT": "polykart-credential-payment",
+  "DATA_BACKEND": "datastore"
+}
