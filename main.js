@@ -14,15 +14,23 @@
 
 const express = require('express');
 const hbs = require('hbs');
-const path = require('path');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 const Datastore = require('@google-cloud/datastore');
-const bodyParser = require('body-parser');
+const multer = require('multer');
+const upload = multer();
+const { OAuth2Client } = require('google-auth-library');
 const request = require('request');
 
+// Extract Google OAuth2 client id from a local file.
+const clientSecrets = JSON.parse(fs.readFileSync('./client_secrets.json'));
+if (!clientSecrets) {
+  console.error('"client_secrets.json" file is missing.');
+  process.exit();
+}
+const CLIENT_ID = clientSecrets.web.client_id;
+
 const app = express();
-app.use(bodyParser.json());
 app.enable('trust proxy');
 app.set('view engine', 'html');
 app.engine('html', hbs.__express);
@@ -32,115 +40,55 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
+app.use(express.static(__dirname, {
+// app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
   setHeaders: res => {
     res.set('Strict-Tranport-Security', 'max-age=31536000');
   }
 }));
 app.set('views', './templates');
 
-
-// from google.appengine.ext import vendor
-// vendor.add('lib')
-
-// import os
-// import sys
-// import json
-// import urllib
-// from bcrypt import bcrypt
-// from flask import Flask, request, make_response, render_template, session
-// from oauth2client import client
-
-// from google.appengine.ext import ndb
-// from google.appengine.api import urlfetch
-
-// FACEBOOK_APPID=os.getenv('FACEBOOK_APPID')
-// FACEBOOK_APPTOKEN=os.getenv('FACEBOOK_APPTOKEN', None)
-
-// app = Flask(
-//     __name__,
-//     template_folder='templates'
-// )
-// app.debug = True
-
-// # Does `client_secrets.json` file exist?
-// if os.path.isfile('client_secrets.json') is False:
-//     sys.exit('client_secrets.json not found.')
-
-// # Load `client_secrets.json` file
-// keys = json.loads(open('client_secrets.json', 'r').read())['web']
-
-// CLIENT_ID = keys['client_id']
-
-// # `SECRET_KEY` can be anything as long as it is hidden, but we use
-// # `client_secret` here for convenience
-// SECRET_KEY = keys['client_secret']
-// app.config.update(
-//     SECRET_KEY=SECRET_KEY
-// )
-
 class CredentialStore {
   constructor() {
+    this.STORE_KEY = 'CredentialStore';
     this.store = new Datastore({
-      projectId: 'polykart-credential-payment'
+      projectId: 'polykart-credential-payment',
+      apiEndpoint: 'http://localhost:8081'
     });
   }
-  async get_by_id(id) {
-    return new Promise((resolve, reject) => {
-      const key = this.store.key(['id', id]);
-      this.store.get(key, (err, entity) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(entity);
-        }
-      });
-    });
+  save(id, data) {
+    const key = this.store.key([this.STORE_KEY, id]);
+    const entity = {
+      key: key,
+      data: data
+    }
+    return this.store.upsert(entity);
+  }
+  get(id) {
+    const key = this.store.key([this.STORE_KEY, id]);
+    return this.store.get(key).then(res => res[0]);
   }
   remove() {
-
+    const key = this.store.key([this.STORE_KEY, id]);
+    return this.store.get(key)
+    .then(res => {
+      if (res.length > 0) {
+        return this.store.delete(key);
+      } else {
+        throw 'User id not registered.';
+      }
+    });
   }
-  hash() {
-
+  hash(passwd) {
+    const salt = bcrypt.genSaltSync(10);
+    return bcrypt.hashSync(passwd, salt);
   }
-  verify() {
-
+  verify(passwd, hashed) {
+    return bcrypt.compareSync(passwd, hashed);
   }
 }
 
-// # App Engine Datastore to save credentials
-// class CredentialStore(ndb.Model):
-//     profile = ndb.JsonProperty()
-
-//     @classmethod
-//     def remove(cls, key):
-//         ndb.Key(cls.__name__, key).delete()
-
-//     @classmethod
-//     def hash(cls, password):
-//         return bcrypt.hashpw(password, bcrypt.gensalt())
-
-//     @classmethod
-//     def verify(cls, password, hashed):
-//         if bcrypt.hashpw(password, hashed) == hashed:
-//             return True
-//         else:
-//             return False
-
-
-// @app.before_request
-// def csrf_protect():
-//     # All incoming POST requests will pass through this
-//     if request.method == 'POST':
-//         # Obtain the custom request header to check if this request
-//         # is from a browser and is intentional.
-//         header = request.headers.get('X-Requested-With', None)
-//         if not header:
-//             # Return 403 if empty or they are different
-//             return make_response('', 403)
-
-
-app.post('/auth/password', (req, res) => {
+app.post('/auth/password', upload.array(), async (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
 
@@ -149,115 +97,70 @@ app.post('/auth/password', (req, res) => {
     return;
   }
 
-  const store = CredentialStore.get_by_id(email);
-  if (!store) {
+  const store = new CredentialStore();
+  try {
+    const profile = await store.get(email);
+    if (!profile)
+      throw 'Matching profile not found.';
+
+    if (store.verify(password, profile['password']) === false)
+      throw 'Wrong password';
+
+    // Make sure not to include the password in payload.
+    delete profile['password'];
+
+    res.status(200).send(JSON.stringify(profile));
+  } catch (e) {
+    console.error(e);
     res.status(401).send('Authentication failed.');
-    return;
   }
-
-  const profile = store.profile;
-
-  if (!profile) {
-    res.status(401).send('Authentication failed.');
-    return;
-  }
-
-  if (CredentialStore.verify(password, profile['password']) === false) {
-    res.status(401).send('Authentication failed.');
-    return;
-  }
-
-  profile.pop('password');
-
-  res.status(200).send(JSON.stringify(profile));
+  return;
 });
 
-app.post('/auth/google', (req, res) => {
+app.post('/auth/google', upload.array(), async (req, res) => {
   const id_token = req.body.id_token;
+
+  const client = new OAuth2Client(CLIENT_ID);
+  const store = new CredentialStore();
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: id_token,
+      audience: CLIENT_ID
+    });
+    const idinfo = ticket.getPayload();
+
+    if (!idinfo)
+      throw 'ID Token not verified.';
+
+    if (idinfo.iss !== 'accounts.google.com' &&
+        idinfo.iss !== 'https://accounts.google.com' )
+      throw 'Wrong issuer.';
+
+    await store.save(idinfo.sub, idinfo);
+    const profile = {
+      id:       idinfo.sub,
+      imageUrl: idinfo.picture,
+      name:     idinfo.name,
+      email:    idinfo.email
+    }
+    res.status(200).send(JSON.stringify(profile));
+  } catch (e) {
+    console.error(e);
+    res.status(401).send('Authentication failed.');
+  }
 });
 
-// @app.route('/auth/google', methods=['POST'])
-// def gauth():
-//     # The POST should include `id_token`
-//     id_token = request.form.get('id_token', '')[:3072]
-
-//     # Verify the `id_token` using API Client Library
-//     idinfo = client.verify_id_token(id_token, CLIENT_ID)
-
-//     # Additional verification: See if `iss` matches Google issuer string
-//     if idinfo['iss'] not in ['accounts.google.com',
-//                              'https://accounts.google.com']:
-//         return make_response('Wrong Issuer.', 401)
-
-//     # For now, we'll always store profile data after successfully
-//     # verifying the token and consider the user authenticated.
-//     store = CredentialStore(id=idinfo['sub'], profile=idinfo)
-//     store.put()
-
-//     # Construct a profile object
-//     profile = {
-//         'id':        idinfo.get('sub', None),
-//         'imageUrl':  idinfo.get('picture', None),
-//         'name':      idinfo.get('name', None),
-//         'email':     idinfo.get('email', None)
-//     }
-
-//     # Not making a session for demo purpose/simplicity
-//     return make_response(json.dumps(profile), 200)
-
-
-// @app.route('/auth/facebook', methods=['POST'])
-// def fblogin():
-//     # The POST should include `access_token` from Facebook
-//     access_token = request.form.get('access_token', None)[:3072]
-
-//     # If the access_token is `None`, fail.
-//     if access_token is None:
-//         return make_response('Authentication failed.', 401)
-
-//     app_token = FACEBOOK_APPTOKEN if FACEBOOK_APPTOKEN is not None else access_token
-
-//     # Verify the access token using Facebook API
-//     params = {
-//         'input_token':  access_token,
-//         'access_token': app_token
-//     }
-//     r = urlfetch.fetch('https://graph.facebook.com/debug_token?' +
-//                        urllib.urlencode(params))
-//     result = json.loads(r.content)
-
-//     # If the response includes `is_valid` being false, fail
-//     if result['data']['is_valid'] is False:
-//         return make_response('Authentication failed.', 401)
-
-//     # Make an API request to Facebook using OAuth
-//     r = urlfetch.fetch('https://graph.facebook.com/me?fields=name,email',
-//                        headers={'Authorization': 'OAuth '+access_token})
-//     idinfo = json.loads(r.content)
-
-//     # Save the Facebook profile
-//     store = CredentialStore(id=idinfo['id'], profile=idinfo)
-//     store.put()
-
-//     # Obtain the Facebook user's image
-//     profile = idinfo
-//     profile['imageUrl'] = 'https://graph.facebook.com/' + profile['id'] +\
-//         '/picture?width=96&height=96'
-
-//     # Not making a session for demo purpose/simplicity
-//     return make_response(json.dumps(profile), 200)
-
-
-app.post('/register', (req, res) => {
+app.post('/register', upload.array(), async (req, res) => {
   const email = req.body.email;
   const _password = req.body.password;
 
-  if (!email || !password) {
+  if (!email || !_password) {
     res.status(400).send('Bad Request');
     return;
   }
 
-  const password = CredentialStore.hash(_password);
+  const store = new CredentialStore();
+  const password = store.hash(_password);
 
   const profile = {
     id: email,
@@ -267,44 +170,39 @@ app.post('/register', (req, res) => {
     imageUrl: ''
   };
 
-  const store = CredentialStore(profile['id'], profile);
-  store.put();
-
-  profile.pop('password');
-
-  res.status(200).send(JSON.stringify(profile));
+  try {
+    await store.save(profile['id'], profile);
+    delete profile['password'];
+    res.status(200).send(JSON.stringify(profile));
+  } catch (e) {
+    res.status(400).send('Storing credential failed.');
+  }
+  return;
 });
 
-// @app.route('/unregister', methods=['POST'])
-// def unregister():
-//     if 'id' not in request.form:
-//         make_response('User id not specified', 400)
+app.post('/unregister', upload.array(), async (req, res) => {
+  const id = req.body.id;
+  if (!id)
+    res.status(400).status('User id not specified.');
 
-//     id = request.form.get('id', '')
-//     store = CredentialStore.get_by_id(str(id))
+  const store = new CredentialStore();
+  try {
+    await store.remove(id);
+    res.status(200).send('Success');
+  } catch (e) {
+    console.error(e);
+    res.status(400).send('Failed to unregister.');
+  }
+});
 
-//     if store is None:
-//         make_response('User not registered', 400)
-
-//     profile = store.profile
-
-//     if profile is None:
-//         return make_response('Failed', 400)
-
-//     # Remove the user account
-//     CredentialStore.remove(str(id))
-//     # Not terminating a session for demo purpose/simplicity
-//     return make_response('Success', 200)
-
-
-// @app.route('/signout', methods=['POST'])
-// def signout():
-//     # Not terminating a session for demo purpose/simplicity
-//     return make_response(json.dumps({}), 200)
+app.post('/signout', (req, res) => {
+  res.status(200).send('{}');
+});
 
 app.get('/', (req, res) => {
-  const clientSecrets = JSON.parse(fs.readFileSync('./client_secrets.json'));
-  res.render('index', { client_id: clientSecrets.web.client_id });
+  res.render('index', {
+    client_id: CLIENT_ID
+  });
 });
 
 const PORT = process.env.PORT || 8080;
