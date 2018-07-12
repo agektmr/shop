@@ -1,1 +1,32 @@
 runtime: nodejs8
+
+handlers:
+- url: /bower_components
+  static_dir: bower_components
+  secure: always
+
+- url: /data
+  static_dir: data
+  secure: always
+
+- url: /images
+  static_dir: images
+  secure: always
+
+- url: /src
+  static_dir: src
+  secure: always
+
+- url: /service-worker.js
+  static_files: service-worker.js
+  upload: service-worker.js
+  secure: always
+
+- url: /manifest.json
+  static_files: manifest.json
+  upload: manifest.json
+  secure: always
+
+- url: /.*
+  script: auto
+  secure: always

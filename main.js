@@ -217,7 +217,7 @@ app.post('/signout', (req, res) => {
   res.send('{}');
 });
 
-app.get('/', (req, res) => {
+app.get('*', (req, res) => {
   res.render('index', {
     client_id: CLIENT_ID
   });
