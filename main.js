@@ -14,6 +14,7 @@
 
 const express = require('express');
 const hbs = require('hbs');
+const path = require('path');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 const Datastore = require('@google-cloud/datastore');
@@ -30,6 +31,13 @@ if (!clientSecrets) {
 }
 const CLIENT_ID = clientSecrets.web.client_id;
 
+const config = JSON.parse(fs.readFileSync('./config.json'));
+if (!config) {
+  console.error('"config.json" file is missing.');
+  process.exit();
+}
+const PROJECT_ID = config.GCLOUD_PROJECT;
+
 const app = express();
 app.enable('trust proxy');
 app.set('view engine', 'html');
@@ -40,21 +48,31 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(__dirname, {
-// app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
-  setHeaders: res => {
-    res.set('Strict-Tranport-Security', 'max-age=31536000');
-  }
-}));
+
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
+    setHeaders: res => {
+      res.set('Strict-Tranport-Security', 'max-age=31536000');
+    }
+  }));
+} else {
+  app.use(express.static(__dirname));
+}
 app.set('views', './templates');
 
 class CredentialStore {
   constructor() {
     this.STORE_KEY = 'CredentialStore';
-    this.store = new Datastore({
-      projectId: 'polykart-credential-payment',
-      apiEndpoint: 'http://localhost:8081'
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      this.store = new Datastore({
+        projectId: PROJECT_ID,
+        apiEndpoint: 'http://localhost:8081'
+      });
+    } else {
+      this.store = new Datastore({
+        projectId: PROJECT_ID
+      });
+    }
   }
   save(id, data) {
     const key = this.store.key([this.STORE_KEY, id]);

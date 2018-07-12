@@ -1,3 +1,3 @@
 dispatch:
-- url: "google-pay.polykart.store/*"
-  service: google-pay
+- url: "node.polykart.store/*"
+  service: node
