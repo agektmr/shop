@@ -2,29 +2,34 @@ runtime: nodejs8
 
 handlers:
 - url: /bower_components
-  static_dir: bower_components
+  static_dir: build/es6-bundled/bower_components
   secure: always
 
 - url: /data
-  static_dir: data
+  static_dir: build/es6-bundled/data
   secure: always
 
 - url: /images
-  static_dir: images
+  static_dir: build/es6-bundled/images
   secure: always
 
 - url: /src
-  static_dir: src
+  static_dir: build/es6-bundled/src
   secure: always
 
 - url: /service-worker.js
-  static_files: service-worker.js
+  static_files: build/es6-bundled/service-worker.js
   upload: service-worker.js
   secure: always
 
 - url: /manifest.json
-  static_files: manifest.json
+  static_files: build/es6-bundled/manifest.json
   upload: manifest.json
+  secure: always
+
+- url: /.well-known/apple-developer-merchantid-domain-association.txt
+  static_files: build/es6-bundled/well-known/apple-developer-merchantid-domain-association.txt
+  upload: apple-developer-merchantid-domain-association.txt
   secure: always
 
 - url: /.*

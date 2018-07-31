@@ -23,6 +23,12 @@ const upload = multer();
 const { OAuth2Client } = require('google-auth-library');
 const request = require('request');
 
+// Replace these params based on your own configuration
+const APPLE_PAY_CERTIFICATE_PATH = "./apple-pay-cert.pem";
+const MERCHANT_IDENTIFIER = "merchant.com.agektmr.payment";
+const MERCHANT_DOMAIN = "polykart-credential-payment.appspot.com";
+const MERCHANT_DIAPLAY_NAME = "ppolykart-credential-payment.appspot.com";
+
 // Extract Google OAuth2 client id from a local file.
 const clientSecrets = JSON.parse(fs.readFileSync('./client_secrets.json'));
 if (!clientSecrets) {
@@ -38,12 +44,18 @@ if (!config) {
 }
 const PROJECT_ID = config.GCLOUD_PROJECT;
 
+const applePayCert = fs.readFileSync(APPLE_PAY_CERTIFICATE_PATH);
+if (!applePayCert) {
+  console.error('"apple-pay-cert.pem" file is missing.');
+  process.exit();
+}
+
 const app = express();
 app.enable('trust proxy');
 app.set('view engine', 'html');
 app.engine('html', hbs.__express);
 app.use((req, res, next) => {
-  if (!req.secure && req.headers.host.indexOf('localhost') < 0) {
+  if (!req.secure && process.env.NODE_ENV === 'production') {
     return res.redirect(301, `https://${req.headers.host}${req.url}`);
   }
   next();
@@ -215,6 +227,33 @@ app.post('/unregister', upload.array(), async (req, res) => {
 
 app.post('/signout', (req, res) => {
   res.send('{}');
+});
+
+app.post('/applepay/validate/', (req, res) => {
+  if (!req.body.validationURL) return res.sendStatus(400);
+
+  const options = {
+    url: req.body.validationURL,
+    cert: applePayCert,
+    key: applePayCert,
+    method: 'POST',
+    body: {
+      merchantIdentifier: MERCHANT_IDENTIFIER,
+      domainName: MERCHANT_DOMAIN,
+      displayName: MERCHANT_DIAPLAY_NAME
+    },
+    json: true
+  };
+
+  request(options, function(err, response, body) {
+    if (response.statusCode !== 200) {
+      console.error(err, response, body);
+      res.status(response.statusCode).send(body);
+      return;
+    } else {
+      res.send(body);
+    }
+  });
 });
 
 app.get('*', (req, res) => {

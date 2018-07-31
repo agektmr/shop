@@ -12,9 +12,11 @@
   "sources": [
     "src/**/*",
     "data/**/*",
-    "images/**/*"
+    "images/**/*",
+    "well-known/**/*"
   ],
   "extraDependencies": [
+    "apple-pay-cert.pem",
     "manifest.json",
     "bower_components/webcomponentsjs/*"
   ],
