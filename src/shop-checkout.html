@@ -13,6 +13,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
 <link rel="import" href="../bower_components/iron-meta/iron-meta.html">
 <link rel="import" href="shop-button.html">
+<link rel="import" href="shop-buy-button.html">
 <link rel="import" href="shop-common-styles.html">
 <link rel="import" href="shop-form-styles.html">
 <link rel="import" href="shop-input.html">
@@ -447,12 +448,21 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               <div>[[_formatPrice(total)]]</div>
             </div>
             <div class="proceed-box">
-              <shop-button responsive class="proceed-box">
-                <button
-                  class="googlepay"
-                  on-tap="_googlePaySubmit"
-                  title="Buy with Google Pay">Buy with GPay</button>
-              </shop-button>
+              <shop-buy-button
+                responsive
+                payment-method="basic-card"
+                button-label="Pay with Credit Card">
+              </shop-buy-button>
+              <shop-buy-button
+                responsive
+                payment-method="https://google.com/pay"
+                button-label="Pay with Google Pay">
+              </shop-buy-button>
+              <shop-buy-button
+                responsive
+                payment-method="https://bobpay.xyz/pay"
+                button-label="Pay with BobPay">
+              </shop-buy-button>
             </div>
           </section>
         </div>

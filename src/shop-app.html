@@ -275,9 +275,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         can-make-g-pay="{{gPayAvailable}}"
         can-make-payment-request="{{prAvailable}}"
         currency="USD"
-        request-payer-email
-        request-payer-phone
-        request-payer-name
         shipping-type="delivery">
       <shop-payment-method
         supported-methods="basic-card"
@@ -287,10 +284,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         supported-methods="https://payment-handler-example.firebaseapp.com/pay"
         ></shop-payment-method>
       <shop-payment-method
-        supported-methods="https://emerald-eon.appspot.com/alicepay"
-        ></shop-payment-method>
-      <shop-payment-method
-        supported-methods="https://emerald-eon.appspot.com/bobpay"
+        supported-methods="https://bobpay.xyz/pay"
         ></shop-payment-method>
       <shop-payment-method
         supported-methods="https://google.com/pay"
@@ -459,9 +453,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.addEventListener('dom-change', (e)=>this._domChange(e));
         this.addEventListener('show-invalid-url-warning', (e)=>this._onFallbackSelectionTriggered(e));
         this.addEventListener('show-snackbar', (e)=>this._showSnackbar(e));
-        this.addEventListener('buy-item', (e)=>this._onBuyItemWithGoogle(e));
-        this.addEventListener('buy-cart', (e)=>this._onBuyCart(e));
-        this.addEventListener('buy-google', (e)=>this._onBuyGoogle(e));
+        this.addEventListener('buy-item', (e)=>this._onBuyItem(e));
+        this.addEventListener('buy-button-pressed', (e)=>this._onBuyButton(e));
         this.addEventListener('process-payment', (e)=>this._processPayment(e));
         this.addEventListener('logout', (e)=>this._onLogout(e));
         // listen for online/offline
@@ -635,78 +628,35 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       _onBuyItem(event) {
-        if ('PaymentRequest' in window) {
-          let displayItems = this._getDisplayItemsFromItem(event.detail);
-          this.payment.show(displayItems)
-          .then(instrument => {
-            return this._processPayment(instrument, false);
-          }).catch(err => {
-            this.payment.preload();
-            if (err.name === 'AbortError') {
-              // Do nothing
-            } else if (err.name === 'NotSupportedError') {
-              this._redirectToCheckout();
-            } else {
-              console.error(`Error while handling PaymentRequest.show(): ${err}`);
-            }
-          });
-        } else {
-          this._redirectToCheckout();
-          return;
-        }
-      }
-
-      _onBuyCart() {
-        if ('PaymentRequest' in window) {
-          let displayItems = this._getDisplayItemsFromCart();
-          this.payment.show(displayItems)
-          .then(instrument => {
-            return this._processPayment(instrument, true);
-          }).catch(err => {
-            this.payment.preload();
-            if (err.name === 'AbortError') {
-              // Do nothing
-            } else if (err.name === 'NotSupportedError') {
-              this._redirectToCheckout();
-            } else {
-              console.error(`Error while handling PaymentRequest.show(): ${err}`);
-            }
-          });
-        } else {
-          this._redirectToCheckout();
-          return;
-        }
-      }
-
-      _onBuyItemWithGoogle(event) {
         let displayItems = this._getDisplayItemsFromItem(event.detail);
-        this.payment.payWithGoogle(displayItems)
+        this.payment.pay(event.detail.paymentMethod, displayItems)
         .then(instrument => {
           return this._processPayment(instrument, true);
         }).catch(err => {
+          console.error(err);
           this.payment.preload();
-          if (err.statusCode === 'DEVELOPER_ERROR') {
-            console.error('There\'s a configuration error');
-            // Do nothing
-          } else if (err.statusCode === 'CANCELED') {
-            this._announce('Payment cancelled.');
+          if (err === 'AbortError' ||
+              err === 'NotSupportedError') {
+            this._redirectToCheckout();
+          } else {
+            // TODO: What else should we do?
           }
         });
       }
 
-      _onBuyGoogle() {
-        let displayItems = this._getDisplayItemsFromCart();
-        this.payment.payWithGoogle(displayItems)
+      _onBuyButton(event) {
+        const displayItems = this._getDisplayItemsFromCart();
+        this.payment.pay(event.detail.paymentMethod, displayItems)
         .then(instrument => {
           return this._processPayment(instrument, true);
         }).catch(err => {
+          console.error(err);
           this.payment.preload();
-          if (err.statusCode === 'DEVELOPER_ERROR') {
-            console.error('There\'s a configuration error');
-            // Do nothing
-          } else if (err.statusCode === 'CANCELED') {
-            this._announce('Failed to run Google Pay. Paying with a credit card instead');
-            this.set('route.path', '/checkout/credit-card');
+          if (err === 'AbortError' ||
+              err === 'NotSupportedError') {
+            this._redirectToCheckout();
+          } else {
+            // TODO: What else should we do?
           }
         });
       }
@@ -715,6 +665,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         // prevent reload loop if we're already on /checkout.
         if (this.route.path !== 'checkout') {
           this.set('route.path', '/checkout');
+          return;
+        }
+      }
+
+      _redirectToCreditCard() {
+        // prevent reload loop if we're already on /checkout.
+        if (this.route.path !== '/checkout/credit-card') {
+          this.set('route.path', '/checkout/credit-card');
           return;
         }
       }

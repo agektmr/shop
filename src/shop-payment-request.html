@@ -10,7 +10,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
 <link rel="import" href="shop-payment-method.html">
-<script src="https://payments.developers.google.com/js/apis/pay.js"></script>
+<script src="https://payments.developers.google.com/js/apis/pay.js" async defer></script>
 
 <dom-module id="shop-payment-request">
   <script>
@@ -92,10 +92,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         summaryLabel: {
           type: String,
           value: "Total"
-        },
-
-        paymentMethods: {
-          computed: '_computePaymentMethods()'
         }
       }}
 
@@ -112,19 +108,41 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
       }
 
-      show(displayItems) {
+      pay(methodName, displayItems) {
+        const paymentMethods = this._computePaymentMethods(methodName);
+        if (!paymentMethods) {
+          console.error('Unsupported payment method specified.');
+        }
+
+        if (methodName === 'https://google.com/pay') {
+          return this.payWithGoogle(displayItems)
+          .catch(err => {
+            // TODO: Work on normalizing errors
+            return Promise.reject(err.statusCode);
+          });
+        } else if ('PaymentRequest' in window) {
+          return this.show(paymentMethods, displayItems)
+          .catch(err => {
+            return Promise.reject(err.name);
+          });
+        } else {
+          return Promise.reject('NotSupportedError');
+        }
+      }
+
+      show(paymentMethods, displayItems) {
         this.details = {
           total: this._getToalFromDisplayItems(displayItems),
           displayItems: displayItems
         };
         this.options = {
-          requestShipping:    true,
+          requestShipping:    false,
           requestPayerEmail:  this.requestPayerEmail,
           requestPayerPhone:  this.requestPayerPhone,
           requestPayerName:   this.requestPayerName,
           shippingType:       this.shippingType
         };
-        this.request = new PaymentRequest(this.paymentMethods, this.details, this.options);
+        this.request = new PaymentRequest(paymentMethods, this.details, this.options);
         this.request.addEventListener('shippingoptionchange', e => {
           e.updateWith(new Promise(resolve => {
             this._updateShippingOptions(
@@ -243,32 +261,29 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       _computeGPayData() {
-        let data = {};
-        for (let method of this.paymentMethods) {
-          if (method.supportedMethods === 'https://google.com/pay') {
-            data = method.data;
-          }
-        }
-        if (!data ||
-            !data.merchantId ||
-            !data.cardRequirements ||
-            !data.allowedPaymentMethods ||
-            !data.paymentMethodTokenizationParameters) {
+        const method = this._computePaymentMethods('https://google.com/pay');
+        if (method.length === 0 ||
+            !method[0].data.merchantId ||
+            !method[0].data.cardRequirements ||
+            !method[0].data.allowedPaymentMethods ||
+            !method[0].data.paymentMethodTokenizationParameters) {
           console.error('Google Pay not configured properly.');
           return {};
         }
-        data.transactionInfo = {
+        method[0].data.transactionInfo = {
           totalPriceStatus: 'NOT_CURRENTLY_KNOWN',
           currencyCode: this.currency
         };
-        return data;
+        return method[0].data;
       }
 
-      _computePaymentMethods() {
+      _computePaymentMethods(methodName) {
         let methods = [];
         let nodes = this.querySelectorAll('shop-payment-method');
-        for (let paymentMethods of nodes) {
-          methods.push(paymentMethods.getMethod());
+        for (let method of nodes) {
+          if (!methodName || methodName === method.supportedMethods) {
+            methods.push(method.getMethod());
+          }
         }
         return methods;
       }

@@ -11,6 +11,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
 <link rel="import" href="../bower_components/app-route/app-route.html">
 <link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="shop-buy-button.html">
 <link rel="import" href="shop-button.html">
 <link rel="import" href="shop-category-data.html">
 <link rel="import" href="shop-common-styles.html">
@@ -216,12 +217,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <shop-button responsive id="addToCart" half-size$="[[_hasGpay()]]">
             <button on-tap="_addToCart" aria-label="Add this item to cart">Add to Cart</button>
           </shop-button>
-          <shop-button responsive id="buyNow" visible$="[[_hasGpay()]]">
-            <button
-              class="googlepay"
-              on-tap="_buyNow"
-              title="Buy with Google Pay">Buy with GPay</button>
-          </shop-button>
+          <shop-buy-button
+            responsive
+            id="buyNow"
+            visible
+            payment-method="https://google.com/pay"
+            button-label="Pay with Google Pay">
+          </shop-buy-button>
         </div>
       </div>
     </div>
@@ -315,10 +317,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }}));
       }
 
-      _buyNow() {
+      _buyNow(event) {
         // This event will be handled by shop-app.
         this.dispatchEvent(new CustomEvent('buy-item', {
           bubbles: true, composed: true, detail: {
+            paymentMethod: event.target.paymentMethod,
             item: this.item,
             quantity: parseInt(this.$.quantitySelect.value, 10),
             size: this.$.sizeSelect.value

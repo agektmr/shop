@@ -1,5 +1,5 @@
 runtime: nodejs8
-service: google-pay
+service: branded-button
 
 handlers:
 - url: /bower_components
