@@ -1,0 +1,5 @@
+dispatch:
+- url: "google-pay.polykart.store/*"
+  service: google-pay
+- url: "branded-button.polykart.store/*"
+  service: branded-button
