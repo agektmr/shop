@@ -1,5 +1,5 @@
 {
-  "entrypoint": "templates/index.html",
+  "entrypoint": "index.html",
   "shell": "src/shop-app.html",
   "fragments": [
     "src/shop-list.html",
@@ -15,6 +15,7 @@
     "images/**/*"
   ],
   "extraDependencies": [
+    "index.html",
     "manifest.json",
     "bower_components/webcomponentsjs/*"
   ],
