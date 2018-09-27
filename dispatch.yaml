@@ -3,3 +3,5 @@ dispatch:
   service: google-pay
 - url: "branded-button.polykart.store/*"
   service: branded-button
+- url: "second-factor.polykart.store/*"
+  service: second-factor

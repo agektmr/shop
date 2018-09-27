@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node main.js",
-    "preinstall": "bower install && git submodule init && git submodule update && pip install -t lib -r requirements.txt",
+    "preinstall": "bower install",
     "build": "polymer build",
     "deploy": "npm run build && gcloud app deploy --project=polykart-credential-payment app.yaml",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -26,9 +26,11 @@
   "homepage": "https://github.com/agektmr/shop#readme",
   "dependencies": {
     "@google-cloud/datastore": "^1.4.1",
+    "base64url": "^3.0.0",
     "bcrypt": "^3.0.0",
-    "body-parser": "^1.18.3",
+    "cbor": "^4.1.1",
     "express": "^4.16.3",
+    "express-session": "^1.15.6",
     "fs": "0.0.1-security",
     "google-auth-library": "^1.6.1",
     "hbs": "^4.0.1",

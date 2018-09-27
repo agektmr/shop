@@ -17,6 +17,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="shop-form-styles.html">
 <link rel="import" href="shop-input.html">
 <link rel="import" href="shop-select.html">
+<link rel="import" href="shop-cred-item.html">
 
 <dom-module id="shop-account">
 
@@ -24,6 +25,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <style include="shop-common-styles shop-button shop-form-styles shop-input shop-select">
 
       .main-frame {
+        max-width: 640px;
         transition: opacity 0.5s;
       }
 
@@ -65,6 +67,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin: 8px;
       }
 
+      .second-factor-section {
+        margin: 64px 8px 8px 8px;
+      }
+
       .welcome {
         text-align: center;
         margin: 26px;
@@ -97,6 +103,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         height: 46px;
       }
 
+      .new-key-section {
+        font-weight: bold;
+        text-align: right;
+        margin-right: 10px;
+      }
+
+
       @media (max-width: 767px) {
         .login-form {
           width: 100%;
@@ -123,6 +136,27 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <input type="submit" on-click="_logout" value="Logout">
           </shop-button>
         </div>
+
+        <div class="second-factor-section">
+          <header>
+            <h2>Register second factors for better security</h2>
+          </header>
+          <div class="keylist">
+            <dom-repeat items="[[keys]]" as="entry">
+              <template>
+                <shop-cred-item on-remove-cred="_onRemoveCred" entry="[[entry]]"></shop-cred-item>
+              </template>
+            </dom-repeat>
+          </div>
+          <div class="new-key-section">
+            <shop-button>
+              <input type="submit" on-click="_tryAKey" value="Try a Key">
+            </shop-button>
+            <shop-button>
+              <input type="submit" on-click="_addNewKey" value="Add New Key">
+            </shop-button>
+          </div>
+        </div>
       </div>
 
       <div class="login-section" visible$="[[!_hasAccount]]">
@@ -134,7 +168,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <div class="row input-row">
             <shop-input>
               <input type="email" id="accountEmail" name="email"
-                  on-focus="_dismissYolo"
                   placeholder="Email" required
                   aria-labelledby="accountEmailLabel"
                   autocomplete="username" value$="[[prefilledEmail]]">
@@ -148,7 +181,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <div class="row input-row">
             <shop-input>
               <input type="password" id="accountPassword" name="password"
-                  on-focus="_dismissYolo"
                   placeholder="Password" required
                   aria-labelledby="accountPasswordLabel"
                   autocomplete="current-password">
@@ -164,9 +196,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <input type="button" on-click="_onSignIn" value="Log In">
           </shop-button>
 
-          <div class="google-signin" on-click="_onGSignIn">
+          <!-- <div class="google-signin" on-click="_onGSignIn">
             <img src="/images/google_signin.png">
-          </div>
+          </div> -->
 
         </form>
       </div>
@@ -200,6 +232,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         state: {
           type: String,
           value: 'init'
+        },
+
+        keys: {
+          type: Array,
+          value: []
         },
 
         /**
@@ -236,18 +273,33 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         _hasAccount: {
           computed: '_computeHasAccount(profile.id)'
+        },
+
+        _hasKeys: {
+          type: Boolean,
+          computed: '_computeHasKeys()'
         }
+
       }}
 
       ready() {
         super.ready();
         if (this.$.account.byKey('account')) {
-          this.accountData = this.$.account.byKey('account');
+          this._init();
         } else {
           window.addEventListener('account-data-ready', e => {
-            this.accountData = this.$.account.byKey('account');
+            this._init();
           });
         }
+      }
+
+      _init() {
+        this.accountData = this.$.account.byKey('account');
+        this.keys = this.accountData.keys;
+      }
+
+      _computeHasKeys() {
+        return this.keys && this.keys.length > 0;
       }
 
       _computeHasAccount(id) {
@@ -381,10 +433,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }));
       }
 
-      _dismissYolo() {
-        this.accountData.dismissYoloDialog();
-      }
-
       _visibleChanged(visible) {
         if (!visible) {
           return;
@@ -394,6 +442,50 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           bubbles: true, composed: true, detail: {
             title: 'Account'
           }
+        }));
+      }
+
+      async _addNewKey() {
+        let msg = '';
+        const options = {};
+        try {
+          const cred = await this.accountData.registerCredential(options);
+          msg = 'Second factor added.';
+        } catch (e) {
+          console.error(e);
+          msg = e;
+        }
+        this.dispatchEvent(new CustomEvent('show-snackbar', {
+          bubbles: true, composed: true, detail: { text: msg }
+        }));
+      }
+
+      async _tryAKey() {
+        let msg = '';
+        try {
+          const cred = await this.accountData.assertCredential();
+          msg = 'Successfully signed in.';
+        } catch (e) {
+          console.error(e);
+          msg = e;
+        }
+        this.dispatchEvent(new CustomEvent('show-snackbar', {
+          bubbles: true, composed: true, detail: { text: msg }
+        }));
+      }
+
+      async _onRemoveCred(e) {
+        let msg = '';
+        const credId = e.detail.credId;
+        try {
+          await this.accountData.removeCredential(credId);
+          msg = 'Removed the credential.';
+        } catch (e) {
+          console.error(e);
+          msg = e;
+        }
+        this.dispatchEvent(new CustomEvent('show-snackbar', {
+          bubbles: true, composed: true, detail: { text: msg }
         }));
       }
 

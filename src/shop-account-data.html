@@ -10,6 +10,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
 <link rel="import" href="../bower_components/polymer/polymer-element.html">
 <link rel="import" href="../bower_components/iron-meta/iron-meta.html">
+<script src="base64url-arraybuffer.js"></script>
 
 <dom-module id="shop-account-data">
 
@@ -17,32 +18,51 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     const SIGNUP = '/register';
     const SIGNOUT = '/signout';
     const UNREGISTER = '/unregister';
+    const SESSION = '/auth/session';
     const PASSWORD = '/auth/password';
     const GOOGLE = '/auth/google';
     const GOOGLE_FEDERATION = 'https://accounts.google.com'
 
     class ShopAccountData extends Polymer.Element {
 
-      static get is() { return 'shop-account-data'; }
+      static get is() {
+        return 'shop-account-data';
+      }
 
-      static get properties() { return {
-        profile: {
-          type: Object,
-          value: null,
-          notify: true
+      static get properties() {
+        return {
+          profile: {
+            type: Object,
+            value: null,
+            notify: true
+          },
+
+          keys: {
+            type: Array,
+            value: []
+          }
         }
-      }}
+      }
 
       ready() {
         super.ready();
-        new Polymer.IronMeta({type: 'account', key: 'account', value: this});
-        this._initializeProfile();
-        gapi.load('auth2', () => {
-          gapi.auth2.init().then(() => {
-            this.dispatchEvent(new CustomEvent('account-data-ready', {
-              bubbles: true, composed: true
-            }));
-          })
+        new Polymer.IronMeta({
+          type: 'account',
+          key: 'account',
+          value: this
+        });
+        this._resumeSession().then(() => {
+          this.getKeys().then(keys => {
+            this.keys = keys;
+          });
+          gapi.load('auth2', () => {
+            gapi.auth2.init().then(() => {
+              this.dispatchEvent(new CustomEvent('account-data-ready', {
+                bubbles: true,
+                composed: true
+              }));
+            })
+          });
         });
       }
 
@@ -53,31 +73,40 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       setProfile(profile) {
         // Set profile
         this.profile = {
-          name:     profile.name,
-          id:       profile.id,
-          iconURL:  profile.imageUrl,
-          email:    profile.email
+          name: profile.name,
+          id: profile.id,
+          iconURL: profile.imageUrl,
+          email: profile.email
         };
+      }
+
+      async _resumeSession() {
+        try {
+          const profile = await this._fetch(SESSION);
+          this.setProfile(profile);
+        } catch (e) {
+          this._initializeProfile();
+        }
       }
 
       _initializeProfile() {
         // Init profile
-        this.profile = {
-          name:     '',
-          id:       '',
-          iconURL:  '',
-          email:    ''
-        };
+        this.setProfile({
+          name: '',
+          id: '',
+          iconURL: '',
+          email: ''
+        });
       }
 
       autoSignIn(unmediated) {
         // Do nothing when Credential API is not available
-        if (navigator.credentials) {
+        if (window.PasswordCredential) {
           // Attempt to get credentials and auto-login if possible
           return navigator.credentials.get({
             password: true,
             federated: {
-              providers: [ GOOGLE_FEDERATION ]
+              providers: [GOOGLE_FEDERATION]
             },
             mediation: unmediated ? 'silent' : 'optional'
           }).then(cred => {
@@ -112,40 +141,40 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       pSignIn(form) {
         return this._fetch(PASSWORD, form)
-        .then(profile => {
-          this.setProfile(profile);
-          if (navigator.credentials) {
-            let email = form.get('email');
-            let password = form.get('password');
-            let cred = new PasswordCredential({
-              id:       email,
-              password: password
-            });
-            navigator.credentials.store(cred);
-         }
-         return Promise.resolve(profile);
-       });
+          .then(profile => {
+            this.setProfile(profile);
+            if (window.PasswordCredential) {
+              let email = form.get('email');
+              let password = form.get('password');
+              let cred = new PasswordCredential({
+                id: email,
+                password: password
+              });
+              navigator.credentials.store(cred);
+            }
+            return Promise.resolve(profile);
+          });
       }
 
       pSignUp(form) {
         return this._fetch(SIGNUP, form)
-        .then(profile => {
-          this.setProfile(profile);
-          if (navigator.credentials) {
-            let email = form.get('email');
-            let password = form.get('password');
-            let cred = new PasswordCredential({
-              id:       email,
-              password: password
-            });
-            navigator.credentials.store(cred);
-          }
-          return Promise.resolve(profile);
-        });
+          .then(profile => {
+            this.setProfile(profile);
+            if (window.PasswordCredential) {
+              let email = form.get('email');
+              let password = form.get('password');
+              let cred = new PasswordCredential({
+                id: email,
+                password: password
+              });
+              navigator.credentials.store(cred);
+            }
+            return Promise.resolve(profile);
+          });
       }
 
       gSignIn(id) {
-        return (function() {
+        return (function () {
           let auth2 = gapi.auth2.getAuthInstance();
           if (auth2.isSignedIn.get()) {
             let googleUser = auth2.currentUser.get();
@@ -153,7 +182,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               return Promise.resolve(googleUser);
             }
           }
-          return auth2.signIn({ login_hint: id || '' });
+          return auth2.signIn({
+            login_hint: id || ''
+          });
         })().then(googleUser => {
           let form = new FormData();
           form.append('id_token', googleUser.getAuthResponse().id_token);
@@ -164,9 +195,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             if (navigator.credentials) {
               // Signed in with Google Account
               let cred = new FederatedCredential({
-                id:       profile.email,
-                name:     profile.name,
-                iconURL:  profile.imageUrl,
+                id: profile.email,
+                name: profile.name,
+                iconURL: profile.imageUrl,
                 provider: GOOGLE_FEDERATION
               });
               navigator.credentials.store(cred);
@@ -176,39 +207,183 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
       }
 
-      _fetch(path, cred = '') {
-        return fetch(path, {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest'
+      async getKeys() {
+        try {
+          return await this._fetch('/webauthn/keys');
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      }
+
+      async registerCredential(opts) {
+        if (window.PublicKeyCredential &&
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+          if (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
+            if (!opts.attestation) opts.attestation = {};
+            opts.attestation.authenticatorAttachement = 'platform';
+            opts.attestation.userVerification = 'required';
+          }
+        }
+        try {
+          const options = await this._fetch('/webauthn/makeCred', opts);
+
+console.log('Response from makeCred', options);
+
+          options.user.id = base64url.decode(options.user.id);
+          options.challenge = base64url.decode(options.challenge);
+
+console.log('PublicKeyCredentialCreationOptions', options);
+
+          const atts = await navigator.credentials.create({
+            publicKey: options
+          });
+
+console.log('Response of `navigator.credentials.get()`', atts);
+
+          const credential = {};
+          if (atts.id)    credential.id =     atts.id;
+          if (atts.type)  credential.type =   atts.type;
+          if (atts.rawId) credential.rawId =  base64url.encode(atts.rawId);
+
+          if (atts.response) {
+            const clientDataJSON =
+              base64url.encode(atts.response.clientDataJSON);
+            const attestationObject =
+              base64url.encode(atts.response.attestationObject);
+            const signature =
+              base64url.encode(atts.response.signature);
+            const userHandle =
+              base64url.encode(atts.response.userHandle);
+            credential.response = {
+              clientDataJSON,
+              attestationObject,
+              signature,
+              userHandle
+            };
+          }
+
+console.log('Credential object being sent to the server', credential);
+
+          await this._fetch('/webauthn/regCred', credential);
+          this.getKeys().then(keys => this.keys = keys);
+        } catch (e) {
+          console.error(e);
+          return Promise.reject(e);
+        }
+      }
+
+      async assertCredential() {
+        try {
+          const options = await this._fetch('/webauthn/getAsst');
+
+console.log('Response from getAsst', options);
+
+          options.challenge = base64url.decode(options.challenge);
+
+          if (options.allowCredentials) {
+            for (let cred of options.allowCredentials) {
+              cred.id = base64url.decode(cred.id);
+            }
+          }
+
+          const asst = await navigator.credentials.get({
+            publicKey: options
+          });
+
+          const credential = {};
+          if (asst.id)    credential.id =     asst.id;
+          if (asst.type)  credential.type =   asst.type;
+          if (asst.rawId) credential.rawId =  base64url.encode(asst.rawId);
+
+          if (asst.response) {
+            const clientDataJSON =
+              base64url.encode(asst.response.clientDataJSON);
+            const authenticatorData =
+              base64url.encode(asst.response.authenticatorData);
+            const signature =
+              base64url.encode(asst.response.signature);
+            const userHandle =
+              base64url.encode(asst.response.userHandle);
+            credential.response = {
+              clientDataJSON,
+              authenticatorData,
+              signature,
+              userHandle
+            };
+          }
+
+          const result = await this._fetch('/webauthn/authAsst', credential);
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      }
+
+      async removeCredential(credId) {
+        try {
+          return await this._fetch('/webauthn/remove', { credId })
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      }
+
+      testReg() {
+        const sample = {
+          id: "JXsZwQ7Cmej3XAAfZqussUEtXFz-knRcF3LZ6_2ke4d3L2kBrMEkwMO-M4Lz7i7nMipMlDpxyjjTWJsk9skL8g",
+          rawId: "JXsZwQ7Cmej3XAAfZqussUEtXFz+knRcF3LZ6/2ke4d3L2kBrMEkwMO+M4Lz7i7nMipMlDpxyjjTWJsk9skL8g==",
+          response: {
+            attestationObject: "o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVjESZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2NBAAAAEQAAAAAAAAAAAAAAAAAAAAAAQCV7GcEOwpno91wAH2arrLFBLVxc/pJ0XBdy2ev9pHuHdy9pAazBJMDDvjOC8+4u5zIqTJQ6cco401ibJPbJC/KlAQIDJiABIVggjPapRDw/+wOfe5qXzsQTPk71Q7Lw7GDPfqFWOYORU+YiWCAxYJ8e3OfC+FVi7fcSkaH6vty9/g8iyTCl5vWPN6BbKg==",
+            clientDataJSON: "eyJjaGFsbGVuZ2UiOiJzTXpjQzBQRlYxZEd3VDFqN0dkSXd6aGhDMlRhU0dIYkNPWTFsSEROa2FrIiwibmV3X2tleXNfbWF5X2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgiLCJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjgwODAiLCJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIn0="
           },
-          body: cred
-        }).then(res => {
+          type: "public-key"
+        }
+        try {
+          this._fetch('/webauthn/regCred', sample);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async _fetch(path, cred = '') {
+        const headers = {
+          'X-Requested-With': 'XMLHttpRequest'
+        };
+        if (cred && !(cred instanceof FormData)) {
+          headers['Content-Type'] = 'application/json';
+          cred = JSON.stringify(cred);
+        }
+        try {
+          const res = await fetch(path, {
+            method: 'POST',
+            credentials: 'include',
+            headers: headers,
+            body: cred
+          });
           if (res.status === 200) {
             // Server authentication succeeded
             return res.json();
           } else {
+            const text = await res.text();
             // Server authentication failed
-            return Promise.reject('Authentication failed');
+            throw text;
           }
-        });
+        } catch (e) {
+          return Promise.reject(e);
+        }
       }
 
       logout() {
         return this._fetch(SIGNOUT)
-        .then(() => {
-          if (navigator.credentials) {
-            navigator.credentials.preventSilentAccess();
-          }
-          this._initializeProfile();
-        });
+          .then(() => {
+            if (navigator.credentials) {
+              navigator.credentials.preventSilentAccess();
+            }
+            this._initializeProfile();
+          });
       }
 
     };
 
     customElements.define(ShopAccountData.is, ShopAccountData);
-
   </script>
 
 </dom-module>
