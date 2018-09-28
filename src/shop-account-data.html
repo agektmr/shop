@@ -51,23 +51,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           key: 'account',
           value: this
         });
-        this._resumeSession().then(() => {
-          this.getKeys().then(keys => {
-            this.keys = keys;
-          });
-          gapi.load('auth2', () => {
-            gapi.auth2.init().then(() => {
-              this.dispatchEvent(new CustomEvent('account-data-ready', {
-                bubbles: true,
-                composed: true
-              }));
-            })
-          });
+        gapi.load('auth2', () => {
+          gapi.auth2.init().then(() => {
+            this.dispatchEvent(new CustomEvent('account-data-ready', {
+              bubbles: true,
+              composed: true
+            }));
+          })
         });
       }
 
       isSignedIn() {
-        return !!this.profile.id;
+        return !!(this.profile && this.profile.id);
       }
 
       setProfile(profile) {
@@ -80,12 +75,17 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         };
       }
 
-      async _resumeSession() {
+      async resumeSession() {
+        if (this.isSignedIn()) {
+          return this.profile;
+        }
         try {
           const profile = await this._fetch(SESSION);
           this.setProfile(profile);
+          return profile;
         } catch (e) {
           this._initializeProfile();
+          return null;
         }
       }
 
@@ -99,78 +99,88 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
       }
 
-      autoSignIn(unmediated) {
+      async autoSignIn(unmediated) {
         // Do nothing when Credential API is not available
-        if (window.PasswordCredential) {
+        if (!window.PasswordCredential) {
+          return Promise.resolve();
+        }
+
+        try {
           // Attempt to get credentials and auto-login if possible
-          return navigator.credentials.get({
+          const cred = await navigator.credentials.get({
             password: true,
             federated: {
               providers: [GOOGLE_FEDERATION]
             },
             mediation: unmediated ? 'silent' : 'optional'
-          }).then(cred => {
-            // Ensure they're not empty
-            if (!cred) {
-              return Promise.resolve();
-            }
-
-            // TODO: Check creds with the auth backend
-            if (cred.type === 'password') {
-              let form = new FormData();
-              form.append('email', cred.id);
-              form.append('password', cred.password);
-              return this._fetch(PASSWORD, form)
-            } else if (cred.type === 'federated') {
-              // This credential must be GOOGLE
-              return this.gSignIn(cred.id);
-            }
-          }).then(profile => {
-            if (profile) {
-              this.setProfile(profile);
-            }
-            return Promise.resolve(profile);
-          }, () => {
-            this._initializeProfile();
-            return Promise.reject();
           });
-        } else {
-          return Promise.resolve();
+
+          // Ensure they're not empty
+          if (!cred) {
+            return Promise.resolve();
+          }
+
+          let profile;
+          // TODO: Check creds with the auth backend
+          if (cred.type === 'password') {
+            let form = new FormData();
+            form.append('email', cred.id);
+            form.append('password', cred.password);
+            profile = await this._fetch(PASSWORD, form)
+          } else if (cred.type === 'federated') {
+            // This credential must be GOOGLE
+            profile = await this.gSignIn(cred.id);
+          }
+
+          if (profile) {
+            this.setProfile(profile);
+          }
+          return Promise.resolve(profile);
+
+        } catch (e) {
+          console.error('Failed to sign-in.');
+          this._initializeProfile();
+          return Promise.reject();
         }
       }
 
-      pSignIn(form) {
-        return this._fetch(PASSWORD, form)
-          .then(profile => {
-            this.setProfile(profile);
-            if (window.PasswordCredential) {
-              let email = form.get('email');
-              let password = form.get('password');
-              let cred = new PasswordCredential({
-                id: email,
-                password: password
-              });
-              navigator.credentials.store(cred);
-            }
-            return Promise.resolve(profile);
-          });
+      async pSignIn(form) {
+        try {
+          const profile = await this._fetch(PASSWORD, form);
+          this.setProfile(profile);
+
+          if (window.PasswordCredential) {
+            let email = form.get('email');
+            let password = form.get('password');
+            let cred = new PasswordCredential({
+              id: email,
+              password: password
+            });
+            navigator.credentials.store(cred);
+          }
+          return Promise.resolve(profile);
+        } catch (e) {
+          return Promise.reject(e);
+        }
       }
 
-      pSignUp(form) {
-        return this._fetch(SIGNUP, form)
-          .then(profile => {
-            this.setProfile(profile);
-            if (window.PasswordCredential) {
-              let email = form.get('email');
-              let password = form.get('password');
-              let cred = new PasswordCredential({
-                id: email,
-                password: password
-              });
-              navigator.credentials.store(cred);
-            }
-            return Promise.resolve(profile);
-          });
+      async pSignUp(form) {
+        try {
+          const profile = await this._fetch(SIGNUP, form)
+          this.setProfile(profile);
+          if (window.PasswordCredential) {
+            let email = form.get('email');
+            let password = form.get('password');
+            let cred = new PasswordCredential({
+              id: email,
+              password: password
+            });
+            navigator.credentials.store(cred);
+          }
+          return Promise.resolve(profile);
+        } catch (e) {
+          return Promise.reject(e);
+        }
       }
 
       gSignIn(id) {
@@ -231,6 +241,12 @@ console.log('Response from makeCred', options);
 
           options.user.id = base64url.decode(options.user.id);
           options.challenge = base64url.decode(options.challenge);
+
+          if (options.excludeCredentials) {
+            for (let cred of options.excludeCredentials) {
+              cred.id = base64url.decode(cred.id);
+            }
+          }
 
 console.log('PublicKeyCredentialCreationOptions', options);
 
@@ -323,23 +339,6 @@ console.log('Response from getAsst', options);
           return await this._fetch('/webauthn/remove', { credId })
         } catch (e) {
           return Promise.reject(e);
-        }
-      }
-
-      testReg() {
-        const sample = {
-          id: "JXsZwQ7Cmej3XAAfZqussUEtXFz-knRcF3LZ6_2ke4d3L2kBrMEkwMO-M4Lz7i7nMipMlDpxyjjTWJsk9skL8g",
-          rawId: "JXsZwQ7Cmej3XAAfZqussUEtXFz+knRcF3LZ6/2ke4d3L2kBrMEkwMO+M4Lz7i7nMipMlDpxyjjTWJsk9skL8g==",
-          response: {
-            attestationObject: "o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVjESZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2NBAAAAEQAAAAAAAAAAAAAAAAAAAAAAQCV7GcEOwpno91wAH2arrLFBLVxc/pJ0XBdy2ev9pHuHdy9pAazBJMDDvjOC8+4u5zIqTJQ6cco401ibJPbJC/KlAQIDJiABIVggjPapRDw/+wOfe5qXzsQTPk71Q7Lw7GDPfqFWOYORU+YiWCAxYJ8e3OfC+FVi7fcSkaH6vty9/g8iyTCl5vWPN6BbKg==",
-            clientDataJSON: "eyJjaGFsbGVuZ2UiOiJzTXpjQzBQRlYxZEd3VDFqN0dkSXd6aGhDMlRhU0dIYkNPWTFsSEROa2FrIiwibmV3X2tleXNfbWF5X2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgiLCJvcmlnaW4iOiJodHRwOi8vbG9jYWxob3N0OjgwODAiLCJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIn0="
-          },
-          type: "public-key"
-        }
-        try {
-          this._fetch('/webauthn/regCred', sample);
-        } catch (e) {
-          console.error(e);
         }
       }
 

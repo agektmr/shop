@@ -526,7 +526,7 @@ app.post('/webauthn/authAsst', async (req, res) => {
   let authr = null;
   if (_profile.authenticators) {
     for (let _authr of _profile.authenticators) {
-      if (_authr.id === credId) {
+      if (_authr.credId === credId) {
         authr = _authr;
         break;
       }

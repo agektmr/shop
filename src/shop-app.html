@@ -737,8 +737,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.accountData = this.$.meta.byKey('account');
 
         // If already signed in, no need to auto sign-in.
-        if (this.accountData.isSignedIn()) return;
-        this.accountData.autoSignIn(true)
+        this.accountData.resumeSession()
+        .then(profile => {
+          if (!profile) {
+            return this.accountData.autoSignIn(true);
+          }
+        }, e => {
+          return Promise.resolve(null);
+        })
         .then(profile => {
           if (profile) {
             this.dispatchEvent(new CustomEvent('show-snackbar', {
@@ -749,7 +755,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           } else {
             console.info('No credentials found');
           }
-        }, err => {
+        }).catch(err => {
           console.info(err.message);
         });
       }
