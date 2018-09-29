@@ -454,7 +454,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         const options = {};
         try {
           const cred = await this.accountData.registerCredential(options);
-          this.keys = await this.getKeys();
+          this.keys = await this.accountData.getKeys();
           msg = 'Second factor added.';
         } catch (e) {
           console.error(e);
