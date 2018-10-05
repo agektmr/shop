@@ -45,6 +45,12 @@ router.post('/password', upload.array(), async (req, res) => {
   return;
 });
 
+router.post('/change-password', upload.array(), async (req, res) => {
+  // Check strong authentication
+  // Check old password matches
+  // Check new 2 passwords match (and not empty)
+});
+
 // router.post('/google', upload.array(), async (req, res) => {
 //   const id_token = req.body.id_token;
 

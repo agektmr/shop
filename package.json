@@ -31,7 +31,6 @@
     "cbor": "^4.1.1",
     "express": "^4.16.3",
     "express-session": "^1.15.6",
-    "fido2-lib": "^2.1.1",
     "fs": "0.0.1-security",
     "google-auth-library": "^1.6.1",
     "hbs": "^4.0.1",

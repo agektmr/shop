@@ -19,7 +19,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="shop-select.html">
 <link rel="import" href="shop-cred-item.html">
 
-<dom-module id="shop-account">
+<dom-module id="shop-settings">
 
   <template>
     <style include="shop-common-styles shop-button shop-form-styles shop-input shop-select">
@@ -136,27 +136,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <input type="submit" on-click="_logout" value="Logout">
           </shop-button>
         </div>
-
-        <div class="second-factor-section">
-          <header>
-            <h2>Register second factors for better security</h2>
-          </header>
-          <div class="keylist">
-            <dom-repeat items="[[keys]]" as="entry">
-              <template>
-                <shop-cred-item on-remove-cred="_onRemoveCred" entry="[[entry]]"></shop-cred-item>
-              </template>
-            </dom-repeat>
-          </div>
-          <div class="new-key-section">
-            <shop-button>
-              <input type="submit" on-click="_tryAKey" value="Try a Key">
-            </shop-button>
-            <shop-button>
-              <input type="submit" on-click="_addNewKey" value="Add New Key">
-            </shop-button>
-          </div>
-        </div>
       </div>
 
       <div class="login-section" visible$="[[!_hasAccount]]">
@@ -210,9 +189,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
   </template>
 
   <script>
-    class ShopAccount extends Polymer.Element {
+    class ShopSettings extends Polymer.Element {
 
-      static get is() { return 'shop-account'; }
+      static get is() { return 'shop-settings'; }
 
       static get properties() { return {
 
@@ -255,7 +234,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         prefilledEmail: String,
 
         /**
-         * If true, shop-account is currently visible on the screen.
+         * If true, shop-settings is currently visible on the screen.
          */
         visible: {
           type: Boolean,
@@ -502,7 +481,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
     };
 
-    customElements.define(ShopAccount.is, ShopAccount);
+    customElements.define(ShopSettings.is, ShopSettings);
 
   </script>
 

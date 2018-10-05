@@ -99,6 +99,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
       }
 
+      /**
+       * Checks CM API availability, obtains a credential, then attempt to
+       * sign-in, then finally sets profile info to this pobject.
+       * @param {boolean} unmediated
+       * @returns Promise<profile>
+       **/
       async autoSignIn(unmediated) {
         // Do nothing when Credential API is not available
         if (!window.PasswordCredential) {
@@ -138,9 +144,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           return Promise.resolve(profile);
 
         } catch (e) {
-          console.error('Failed to sign-in.');
+          console.error(e);
           this._initializeProfile();
-          return Promise.reject();
+          return Promise.reject(e);
         }
       }
 
@@ -281,7 +287,6 @@ console.log('Response of `navigator.credentials.get()`', atts);
 console.log('Credential object being sent to the server', credential);
 
           await this._fetch('/webauthn/regCred', credential);
-          this.getKeys().then(keys => this.keys = keys);
         } catch (e) {
           console.error(e);
           return Promise.reject(e);
@@ -336,7 +341,8 @@ console.log('Response from getAsst', options);
 
       async removeCredential(credId) {
         try {
-          return await this._fetch('/webauthn/remove', { credId })
+          await this._fetch('/webauthn/remove', { credId })
+          return;
         } catch (e) {
           return Promise.reject(e);
         }

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const base64url = require('base64url');
 const cbor = require('cbor');
 const CredentialStore = require('./credential-store');
+// const { Fido2Lib } = require('fido2-lib');
 
 const createBase64Random = (len = 32) => {
   return base64url(crypto.randomBytes(len));
@@ -32,8 +33,21 @@ router.post('/keys', async (req, res) => {
 });
 
 router.post('/makeCred', async (req, res) => {
-  const response = {};
   const profile = req.session.profile;
+  if (!profile) {
+    res.status(401).send('Not authorized');
+    return;
+  }
+  let _profile;
+  try {
+    const store = new CredentialStore();
+    _profile = await store.get(profile.id);
+    if (!_profile) throw 'Profile not found';
+  } catch (e) {
+    res.status(400).send(e);
+    return;
+  }
+
   /**
    * Expected option items:
    * {
@@ -44,91 +58,89 @@ router.post('/makeCred', async (req, res) => {
    *  attestation? = 'none' | 'indirect' | 'direct'
    * }
    **/
-  if (profile) {
-    let _profile;
-    try {
-      const store = new CredentialStore();
-      _profile = await store.get(profile.id);
-      if (!_profile) throw 'Profile not found';
-    } catch (e) {
-      res.status(400).send(e);
-      return;
+  // const fido = new Fido2Lib({
+  //   timeout: req.body.timeout,
+  //   rpId: req.host,
+  //   rpName:'Polykart',
+  //   challengeSize: 32,
+  //   authenticator
+  // });
+  // const options = await fido.attestationOptions();
+  // console.log(options);
+  // return;
+  /**
+   * Response format:
+   * {
+   *   rp,
+   *   user,
+   *   challenge,
+   *   pubKeyCredParams,
+   *   timeout?,
+   *   excludeCredentials?,
+   *   authenticatorSelection? = {
+   *     attestationAttachment? = 'platform' | 'cross-platform',
+   *     requireResidentKey? = true | false,
+   *     userVerification? = 'required' | 'preferred' | 'discouraged'
+   *   },
+   *   attestation?,
+   *   extensions?
+   * }
+   **/
+  const response = {};
+  response.rp = {
+    id: req.host,
+    name: 'Polykart'
+  };
+  response.user = {
+    displayName: profile.name || profile.email || 'No name',
+    id: createBase64Random(),
+    name: profile.id
+  };
+  response.pubKeyCredParams = [{
+    type: 'public-key', alg: -7
+  }];
+  response.timeout = req.body.timeout || 1000 * 30;
+  response.challenge = createBase64Random();
+  req.session.challenge = response.challenge;
+  if (_profile.authenticators) {
+    response.excludeCredentials = [];
+    for (let authr of _profile.authenticators) {
+      response.excludeCredentials.push({
+        type: authr.type,
+        id: authr.credId,
+        // TODO: How do I get this?
+        // transports: authr.transports
+      });
     }
-    /**
-     * Response format:
-     * {
-     *   rp,
-     *   user,
-     *   challenge,
-     *   pubKeyCredParams,
-     *   timeout?,
-     *   excludeCredentials?,
-     *   authenticatorSelection? = {
-     *     attestationAttachment? = 'platform' | 'cross-platform',
-     *     requireResidentKey? = true | false,
-     *     userVerification? = 'required' | 'preferred' | 'discouraged'
-     *   },
-     *   attestation?,
-     *   extensions?
-     * }
-     **/
-    response.rp = {
-      id: req.host,
-      name: 'Polykart'
-    };
-    response.user = {
-      displayName: profile.name || profile.email || 'No name',
-      id: createBase64Random(),
-      name: profile.id
-    };
-    response.pubKeyCredParams = [{
-      type: 'public-key', alg: -7
-    }];
-    response.timeout = req.body.timeout || 1000 * 30;
-    response.challenge = createBase64Random();
-    req.session.challenge = response.challenge;
-    if (_profile.authenticators) {
-      response.excludeCredentials = [];
-      for (let authr of _profile.authenticators) {
-        response.excludeCredentials.push({
-          type: authr.type,
-          id: authr.credId,
-          // TODO: How do I get this?
-          // transports: authr.transports
-        });
-      }
-    }
-
-    const as = {}; // authenticatorSelection
-    const aa = req.body.attestationAttachment;
-    const rr = req.body.requireResidentKey;
-    const uv = req.body.userVerification;
-    const cp = req.body.attestation; // attestationConveyancePreference
-    let asFlag = false;
-
-    if (aa && (aa == 'platform' || aa == 'cross-platform')) {
-      asFlag = true;
-      as.attestationAttachment = aa;
-    }
-    if (rr && typeof rr == boolean) {
-      asFlag = true;
-      as.requireResidentKey = rr;
-    }
-    if (uv && (uv == 'required' || uv == 'preferred' || uv == 'discouraged')) {
-      asFlag = true;
-      as.userVerification = uv;
-    }
-    if (asFlag) {
-      response.authenticatorSelection = as;
-    }
-    if (cp && (cp == 'none' || cp == 'indirect' || cp == 'direct')) {
-      response.attestation = cp;
-    }
-
-    res.json(response);
-  } else {
-    res.status(401).send('Not authorized');
   }
+
+  const as = {}; // authenticatorSelection
+  const aa = req.body.attestationAttachment;
+  const rr = req.body.requireResidentKey;
+  const uv = req.body.userVerification;
+  const cp = req.body.attestation; // attestationConveyancePreference
+  let asFlag = false;
+
+  if (aa && (aa == 'platform' || aa == 'cross-platform')) {
+    asFlag = true;
+    as.attestationAttachment = aa;
+  }
+  if (rr && typeof rr == boolean) {
+    asFlag = true;
+    as.requireResidentKey = rr;
+  }
+  if (uv && (uv == 'required' || uv == 'preferred' || uv == 'discouraged')) {
+    asFlag = true;
+    as.userVerification = uv;
+  }
+  if (asFlag) {
+    response.authenticatorSelection = as;
+  }
+  if (cp && (cp == 'none' || cp == 'indirect' || cp == 'direct')) {
+    response.attestation = cp;
+  }
+
+  res.json(response);
 });
 
 router.post('/regCred', async (req, res) => {

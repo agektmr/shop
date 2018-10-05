@@ -737,26 +737,24 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.accountData = this.$.meta.byKey('account');
 
         // If already signed in, no need to auto sign-in.
-        this.accountData.resumeSession()
-        .then(profile => {
-          if (!profile) {
-            return this.accountData.autoSignIn(true);
-          }
+        this.accountData.resumeSession().then(profile => {
+          if (!profile) return Promise.resolve(null);
         }, e => {
           return Promise.resolve(null);
-        })
-        .then(profile => {
-          if (profile) {
-            this.dispatchEvent(new CustomEvent('show-snackbar', {
-              bubbles: true, composed: true, detail: {
-                text: 'You are signed in!'
-              }
-            }));
-          } else {
-            console.info('No credentials found');
+        }).then(profile => {
+          return this.accountData.autoSignIn(true);
+        }).then(profile => {
+          if (!profile) {
+            console.info('Failed to auto login');
+            return;
           }
-        }).catch(err => {
-          console.info(err.message);
+          this.dispatchEvent(new CustomEvent('show-snackbar', {
+            bubbles: true, composed: true, detail: {
+              text: 'You are signed in!'
+            }
+          }));
+        }).catch(e => {
+          console.error(e);
         });
       }
 
