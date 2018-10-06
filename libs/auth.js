@@ -46,9 +46,50 @@ router.post('/password', upload.array(), async (req, res) => {
 });
 
 router.post('/change-password', upload.array(), async (req, res) => {
-  // Check strong authentication
-  // Check old password matches
+  // TODO: Check strong authentication
+  if (!req.session.profile) {
+    res.status(401).send('Authentication required.');
+    return;
+  }
+  const old_password = req.body['old-password'];
+  const new_password1 = req.body['new-password1'];
+  const new_password2 = req.body['new-password2'];
+
+  if (old_password == '' ||
+      new_password1 == '' ||
+      new_password2 == '') {
+    res.status(400).send('Enter all values');
+    return;
   // Check new 2 passwords match (and not empty)
+  } else if (new_password1 != new_password2) {
+    res.status(400).send('New passwords don\'t match');
+    return;
+  }
+
+  const store = new CredentialStore();
+  try {
+    const _profile = await store.get(req.session.profile.id);
+    if (!_profile)
+      throw 'Matching profile not found.';
+
+    // Check old password matches
+    if (store.verify(old_password, _profile['password']) === false)
+      throw 'Wrong password';
+
+    // Make sure not to include the password in payload.
+    _profile.password = store.hash(new_password1);
+    await store.save(_profile.id, _profile);
+
+    delete _profile['password'];
+    delete _profile['authenticators'];
+    req.session.profile = _profile;
+
+    res.json(_profile);
+  } catch (e) {
+    console.error(e);
+    res.status(401).send('Authentication failed.');
+  }
+  return;
 });
 
 // router.post('/google', upload.array(), async (req, res) => {
@@ -102,7 +143,7 @@ router.post('/register', upload.array(), async (req, res) => {
     email: email,
     name: req.body.name,
     password: password,
-    imageUrl: ''
+    imageurl: ''
   };
 
   try {

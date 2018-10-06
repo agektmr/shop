@@ -373,8 +373,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <shop-cart name="cart" cart="[[cart]]" total="[[total]]"></shop-cart>
       <!-- checkout view -->
       <shop-checkout name="checkout" cart="[[cart]]" total="[[total]]" route="{{subroute}}" g-pay-available="[[gPayAvailable]]" pr-available="[[prAvailable]]"></shop-checkout>
+      <!-- settings view -->
+      <shop-settings name="settings" profile="[[profile]]" route="[[subroute]]"></shop-settings>
       <!-- account view -->
       <shop-account name="account" profile="[[profile]]" route="[[subroute]]" prefilled-email="[[userEmail]]"></shop-account>
+      <!-- change password -->
+      <shop-change-password name="change-password" profile="[[profile]]"></shop-change-password>
 
       <shop-404-warning name="404"></shop-404-warning>
     </iron-pages>
@@ -755,6 +759,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }));
         }).catch(e => {
           console.error(e);
+          this.dispatchEvent(new CustomEvent('show-snackbar', {
+            bubbles: true, composed: true, detail: {
+              text: e
+            }
+          }));
         });
       }
 

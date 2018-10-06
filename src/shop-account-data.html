@@ -20,6 +20,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     const UNREGISTER = '/auth/unregister';
     const SESSION = '/auth/session';
     const PASSWORD = '/auth/password';
+    const PCHANGE = '/auth/change-password';
     const GOOGLE = '/auth/google';
     const GOOGLE_FEDERATION = 'https://accounts.google.com'
 
@@ -187,6 +188,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         } catch (e) {
           return Promise.reject(e);
         }
+      }
+
+      async pChange(form) {
+        const profile = await this._fetch(PCHANGE, form);
+        if (window.PasswordCredential) {
+          const cred = new PasswordCredential({
+            id: profile.id,
+            password: form.get('new-password1')
+          });
+          await navigator.credentials.store(cred);
+        }
+        return profile;
       }
 
       gSignIn(id) {
