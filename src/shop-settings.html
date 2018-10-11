@@ -84,7 +84,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin: 26px 0;
       }
 
-      .login-section:not([visible]) {
+      .hidden:not([visible]) {
         display: none;
       }
 
@@ -165,17 +165,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             </paper-icon-button>
           </div>
 
-          <div class="settings-menu">
-            <label for="screenlock-settings">Fingerprint reauth</label>
-            <!-- <paper-toggle-button
-              on-change="_onReauthChanged"
-              checked="{{_reauthEnabled}}"
-              id="screenlock-settings"
-              disabled="[[!_isUVPAA]]"> -->
+          <div class="settings-menu hidden" visible$="[[!_isUVPAA]]">
+            <label for="screenlock-setting">Fingerprint reauth</label>
             <paper-toggle-button
               on-change="_onReauthChanged"
               checked="{{_reauthEnabled}}"
-              id="screenlock-settings">
+              id="screenlock-setting">
             </paper-toggle-button>
           </div>
         </div>
@@ -187,7 +182,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         </div>
       </div>
 
-      <div class="login-section" visible$="[[!_hasAccount]]">
+      <div class="login-section hidden" visible$="[[!_hasAccount]]">
         <form action="#" id="loginForm"
             is="iron-form"
             method="post"
@@ -520,17 +515,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       async _onReauthChanged(e) {
         let msg;
         e.stopPropagation();
-        if (e.target.checked === true) {
-          await this.accountData.registerReauthKey();
-          msg = 'Fingerprint reauth enabled.';
-        } else {
-          await this.accountData.removeReauthKey();
-          msg = 'Fingerprint reauth disabled.';
+        try {
+          if (e.target.checked === true) {
+            await this.accountData.registerReauthKey();
+            msg = 'Fingerprint reauth enabled.';
+          } else {
+            await this.accountData.removeReauthKey();
+            msg = 'Fingerprint reauth disabled.';
+          }
+        } catch (err) {
+          console.error(err);
+          // TODO: not enabling/disabling. Fix it.
+          e.target.checked = !e.target.checked;
+          msg = 'Changing reauth failed.';
         }
         this.dispatchEvent(new CustomEvent('show-snackbar', {
           bubbles: true, composed: true, detail: { text: msg }
         }));
-        console.log(e);
       }
 
       _onChangePasswordLink() {

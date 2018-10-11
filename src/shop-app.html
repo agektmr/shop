@@ -505,9 +505,20 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               // If reauth failed, try regular auth
               if (!profile) {
                 this.set('route.path', '/settings');
+                return;
               }
+              this.dispatchEvent(new CustomEvent('show-snackbar', {
+                bubbles: true, composed: true, detail: {
+                  text: 'Reauth successful!'
+                }
+              }));
             }).catch(e => {
               console.error(e);
+              this.dispatchEvent(new CustomEvent('show-snackbar', {
+                bubbles: true, composed: true, detail: {
+                  text: e
+                }
+              }));
               this.set('route.path', '/settings');
             });
           } else {

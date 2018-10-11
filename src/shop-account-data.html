@@ -260,6 +260,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       _removeReauthData() {
+        const credId = localStorage.getItem('reauth');
+        this._fetch('/webauthn/remove', {
+          credId: credId
+        });
         localStorage.removeItem('reauth');
       }
 
@@ -336,10 +340,10 @@ console.log('Response of `navigator.credentials.get()`', cred);
 
           const parsedCred = await this._encodeAuthenticatorAssertionResponse(cred);
 
-          return await this._fetch('/webauthn/authAsst', parsedCred);
+          return await this._fetch('/webauthn/authAsst?reauth', parsedCred);
         } catch (e) {
           console.error(e);
-          throw e;
+          throw 'Reauth failed!';
         }
       }
 

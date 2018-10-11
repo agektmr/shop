@@ -20,6 +20,8 @@ const auth = require('./libs/auth');
 const webauthn = require('./libs/webauthn');
 const common = require('./libs/common');
 
+const AUTH_DURATION = 1000 * 60 * 60 * 24;
+
 const app = express();
 app.enable('trust proxy');
 app.set('view engine', 'html');
@@ -44,7 +46,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 app.use(session({
   secret: common.CLIENT_SECRET,
-  maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  maxAge: AUTH_DURATION // 24 hours
 }));
 app.set('views', './templates');
 

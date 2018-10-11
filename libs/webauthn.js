@@ -5,9 +5,22 @@ const cbor = require('cbor');
 const CredentialStore = require('./credential-store');
 // const { Fido2Lib } = require('fido2-lib');
 
+const REAUTH_DURATION = 1000 * 60 * 5; // 5 minutes
+
 function createBase64Random(len = 32) {
   return base64url(crypto.randomBytes(len));
 };
+
+function shortSessionCheck(req, res, next) {
+  const profile = req.session.profile;
+  const now = (new Date()).getTime();
+  const acceptable = now - REAUTH_DURATION;
+  if (profile.reauth && profile.reauth > acceptable) {
+    next();
+  } else {
+    res.status(401).send('Authentication Required');
+  }
+}
 
 function sessionCheck(req, res, next) {
   const profile = req.session.profile;
@@ -35,8 +48,12 @@ function verifyCredential(credential, challenge, origin) {
   if (clientData.origin !== origin)
     throw 'Wrong origin.';
 
-  const buffer = base64url.toBuffer(attestationObject || authenticatorData);
-  const response = cbor.decodeAllSync(buffer)[0];
+  // Temporary workaround for inmature CBOR
+  // const buffer = base64url.toBuffer(attestationObject || authenticatorData);
+  // const response = cbor.decodeAllSync(buffer)[0];
+
+  const response = {};
+  response.fmt = 'none';
 
   return response;
 };
@@ -59,7 +76,7 @@ router.post('/keys', sessionCheck, async (req, res) => {
   }
 });
 
-router.post('/makeCred', sessionCheck, async (req, res) => {
+router.post('/makeCred', shortSessionCheck, async (req, res) => {
   const profile = req.session.profile;
   const reauthFlag = req.query.reauth !== undefined;
   let _profile;
@@ -167,7 +184,7 @@ router.post('/makeCred', sessionCheck, async (req, res) => {
   res.json(response);
 });
 
-router.post('/regCred', sessionCheck, async (req, res) => {
+router.post('/regCred', shortSessionCheck, async (req, res) => {
   const profile = req.session.profile;
   const reauthFlag = req.query.reauth !== undefined;
   const credId = req.body.id;
@@ -198,11 +215,11 @@ router.post('/regCred', sessionCheck, async (req, res) => {
 
     switch (response.fmt) {
       case 'none':
+      case 'packed':
         // Ignore attestation
         break;
       case 'fido-u2f':
       case 'android-safetynet':
-      case 'packed':
       default:
         // Not implemented yet
         throw 'Attestation not supported';
@@ -321,11 +338,11 @@ router.post('/authAsst', sessionCheck, async (req, res) => {
 
     switch (response.fmt) {
       case 'none':
+      case 'packed':
         // Ignore attestation
         break;
       case 'fido-u2f':
       case 'android-safetynet':
-      case 'packed':
       default:
         // Not implemented yet
         throw 'Attestation not supported';
@@ -357,7 +374,8 @@ router.post('/authAsst', sessionCheck, async (req, res) => {
     }
 
     // Update timestamp
-    authr.last_used = (new Date()).getTime();
+    const now = (new Date()).getTime();
+    authr.last_used = now;
     // TODO: Anything else to update?
 
 console.log(_profile);
@@ -366,15 +384,18 @@ console.log(_profile);
     delete _profile.password;
     delete _profile.secondFactors;
     delete _profile.reauthKeys;
-    _profile.reauth = true;
+    _profile.reauth = now;
+    req.session.profile = _profile;
     res.json(_profile);
   } catch (e) {
+    console.error(e);
     res.status(400).send(e);
   }
 });
 
 router.post('/remove', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
+  const reauth = req.query.reauth;
 
   // Ignore authenticator for the moment
   const store = new CredentialStore();
@@ -384,19 +405,41 @@ router.post('/remove', sessionCheck, async (req, res) => {
     if (!_profile) {
       throw 'User profile not found.';
     }
-    if (!_profile.secondFactors) {
-      throw 'Authenticator not registered.';
-    }
-    for (let i = 0; i < _profile.secondFactors.length; i++) {
-      const cred = _profile.secondFactors[i];
-      if (cred.credId === req.body.credId) {
-        _profile.secondFactors.splice(i, 1);
-        store.save(profile.id, _profile);
-        res.status(200).send({});
-        return;
+  } catch (e) {
+    console.error(e);
+    res.status(400).send(e);
+  }
+
+  try {
+    if (reauth) {
+      if (!_profile.reauthKeys) {
+        throw 'Reauth key not registered.';
       }
+      for (let i = 0; i < _profile.reauthKeys.length; i++) {
+        const cred = _profile.reauthKeys[i];
+        if (cred.credId === reauth) {
+          _profile.reauthKeys.splice(i, 1);
+          await store.save(profile.id, _profile);
+          res.json({});
+          return;
+        }
+      }
+      throw 'No matching authenticator found.';
+    } else {
+      if (!_profile.secondFactors) {
+        throw 'Authenticator not registered.';
+      }
+      for (let i = 0; i < _profile.secondFactors.length; i++) {
+        const cred = _profile.secondFactors[i];
+        if (cred.credId === req.body.credId) {
+          _profile.secondFactors.splice(i, 1);
+          await store.save(profile.id, _profile);
+          res.json({});
+          return;
+        }
+      }
+      throw 'No matching authenticator found.';
     }
-    res.status(400).send('No matching authenticator found.');
   } catch (e) {
     console.error(e);
     res.status(400).send(e);
