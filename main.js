@@ -33,7 +33,8 @@ app.use((req, res, next) => {
 });
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
+  // app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
+  app.use(express.static(path.join(__dirname, ''), {
     setHeaders: res => {
       res.set('Strict-Tranport-Security', 'max-age=31536000');
     }

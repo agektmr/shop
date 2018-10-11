@@ -41,6 +41,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           keys: {
             type: Array,
             value: []
+          },
+
+          isUVPAA: {
+            type: Boolean,
+            value: false
           }
         }
       }
@@ -52,14 +57,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           key: 'account',
           value: this
         });
-        gapi.load('auth2', () => {
-          gapi.auth2.init().then(() => {
+        if (PublicKeyCredential &&
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
+          PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+          .then(result => {
+            this.isUVPAA = result;
+          });
+        } else {
+          return this.isUVPAA = false;
+        }
+        // gapi.load('auth2', () => {
+        //   gapi.auth2.init().then(() => {
             this.dispatchEvent(new CustomEvent('account-data-ready', {
               bubbles: true,
               composed: true
             }));
-          })
-        });
+        //   })
+        // });
       }
 
       isSignedIn() {
@@ -76,10 +90,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         };
       }
 
-      async resumeSession() {
-        if (this.isSignedIn()) {
-          return this.profile;
-        }
+      async checkSession() {
         try {
           const profile = await this._fetch(SESSION);
           this.setProfile(profile);
@@ -236,6 +247,102 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
       }
 
+      reauthAvailable() {
+        return !!localStorage.getItem('reauth');
+      }
+
+      _getReauthData() {
+        return localStorage.getItem('reauth');
+      }
+
+      _setReauthData(credId) {
+        localStorage.setItem('reauth', credId);
+      }
+
+      _removeReauthData() {
+        localStorage.removeItem('reauth');
+      }
+
+      async registerReauthKey() {
+        // If reauth key is already registered, throw an exception
+        if (this._getReauthData() !== null) {
+          return Promise.reject('Reauth key alrady registered.');
+        }
+
+        const opts = {};
+        if (!opts.authenticatorSelection) opts.authenticatorSelection = {};
+        opts.authenticatorSelection.authenticatorAttachement = 'platform';
+        opts.authenticatorSelection.userVerification = 'required';
+
+        try {
+          const options = await this._fetch('/webauthn/makeCred?reauth', opts);
+console.log('Response from makeCred', options);
+
+          options.user.id = base64url.decode(options.user.id);
+          options.challenge = base64url.decode(options.challenge);
+
+          if (options.excludeCredentials) {
+            for (let cred of options.excludeCredentials) {
+              cred.id = base64url.decode(cred.id);
+            }
+          }
+
+console.log('PublicKeyCredentialCreationOptions', options);
+
+          const cred = await navigator.credentials.create({
+            publicKey: options
+          });
+console.log('Response of `navigator.credentials.get()`', cred);
+
+          const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
+
+          const profile = await this._fetch('/webauthn/regCred?reauth', parsedCred);
+
+          this._setReauthData(parsedCred.id);
+
+          return Promise.resolve();
+        } catch (e) {
+          console.error(e);
+          return Promise.reject(e);
+        }
+      }
+
+      async removeReauthKey() {
+        const url = `/webauthn/removeReauth?reauth=${encodeURIComponent(credId)}`;
+        await this._fetch(url);
+        this._removeReauthData();
+        return Promise.resolve();
+      }
+
+      async reauth() {
+        const credId = this._getReauthData();
+        try {
+          const url =`/webauthn/getAsst?reauth=${encodeURIComponent(credId)}`;
+          const options = await this._fetch(url);
+
+  console.log('Response from getAsst', options);
+
+          options.challenge = base64url.decode(options.challenge);
+
+          if (options.allowCredentials) {
+            for (let cred of options.allowCredentials) {
+              cred.id = base64url.decode(cred.id);
+            }
+          }
+
+          const cred = await navigator.credentials.get({
+            publicKey: options
+          });
+
+          const parsedCred = await this._encodeAuthenticatorAssertionResponse(cred);
+
+          return await this._fetch('/webauthn/authAsst', parsedCred);
+        } catch (e) {
+          console.error(e);
+          throw e;
+        }
+      }
+
       async getKeys() {
         try {
           return await this._fetch('/webauthn/keys');
@@ -244,15 +351,57 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
-      async registerCredential(opts) {
-        if (window.PublicKeyCredential &&
-            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-          if (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()) {
-            if (!opts.attestation) opts.attestation = {};
-            opts.attestation.authenticatorAttachement = 'platform';
-            opts.attestation.userVerification = 'required';
-          }
+      async _encodeAuthenticatorAttestationResponse(atts) {
+        const credential = {};
+        if (atts.id)    credential.id =     atts.id;
+        if (atts.type)  credential.type =   atts.type;
+        if (atts.rawId) credential.rawId =  base64url.encode(atts.rawId);
+
+        if (atts.response) {
+          const clientDataJSON =
+            base64url.encode(atts.response.clientDataJSON);
+          const attestationObject =
+            base64url.encode(atts.response.attestationObject);
+          const signature =
+            base64url.encode(atts.response.signature);
+          const userHandle =
+            base64url.encode(atts.response.userHandle);
+          credential.response = {
+            clientDataJSON,
+            attestationObject,
+            signature,
+            userHandle
+          };
         }
+        return credential;
+      }
+
+      async _encodeAuthenticatorAssertionResponse(asst) {
+        const credential = {};
+        if (asst.id)    credential.id =     asst.id;
+        if (asst.type)  credential.type =   asst.type;
+        if (asst.rawId) credential.rawId =  base64url.encode(asst.rawId);
+
+        if (asst.response) {
+          const clientDataJSON =
+            base64url.encode(asst.response.clientDataJSON);
+          const authenticatorData =
+            base64url.encode(asst.response.authenticatorData);
+          const signature =
+            base64url.encode(asst.response.signature);
+          const userHandle =
+            base64url.encode(asst.response.userHandle);
+          credential.response = {
+            clientDataJSON,
+            authenticatorData,
+            signature,
+            userHandle
+          };
+        }
+        return credential;
+      }
+
+      async registerCredential(opts) {
         try {
           const options = await this._fetch('/webauthn/makeCred', opts);
 
@@ -269,37 +418,16 @@ console.log('Response from makeCred', options);
 
 console.log('PublicKeyCredentialCreationOptions', options);
 
-          const atts = await navigator.credentials.create({
+          const cred = await navigator.credentials.create({
             publicKey: options
           });
 
-console.log('Response of `navigator.credentials.get()`', atts);
+console.log('Response of `navigator.credentials.get()`', cred);
 
-          const credential = {};
-          if (atts.id)    credential.id =     atts.id;
-          if (atts.type)  credential.type =   atts.type;
-          if (atts.rawId) credential.rawId =  base64url.encode(atts.rawId);
+          const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
 
-          if (atts.response) {
-            const clientDataJSON =
-              base64url.encode(atts.response.clientDataJSON);
-            const attestationObject =
-              base64url.encode(atts.response.attestationObject);
-            const signature =
-              base64url.encode(atts.response.signature);
-            const userHandle =
-              base64url.encode(atts.response.userHandle);
-            credential.response = {
-              clientDataJSON,
-              attestationObject,
-              signature,
-              userHandle
-            };
-          }
+          return await this._fetch('/webauthn/regCred', parsedCred);
 
-console.log('Credential object being sent to the server', credential);
-
-          await this._fetch('/webauthn/regCred', credential);
         } catch (e) {
           console.error(e);
           return Promise.reject(e);
@@ -391,12 +519,12 @@ console.log('Response from getAsst', options);
 
       logout() {
         return this._fetch(SIGNOUT)
-          .then(() => {
-            if (navigator.credentials) {
-              navigator.credentials.preventSilentAccess();
-            }
-            this._initializeProfile();
-          });
+        .then(() => {
+          if (PasswordCredential) {
+            navigator.credentials.preventSilentAccess();
+          }
+          this._initializeProfile();
+        });
       }
 
     };

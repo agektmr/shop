@@ -5,3 +5,5 @@ dispatch:
   service: branded-button
 - url: "second-factor.polykart.store/*"
   service: second-factor
+- url: "reauth.polykart.store/*"
+  service: reauth

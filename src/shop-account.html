@@ -323,11 +323,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             }
           }));
           this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('route-change', {
-            bubbles: true, composed: true, detail: {
-              path: '/home'
-            }
-          }));
+          this._pushState('/home');
         }, err => {
           console.error(err);
           this._setWaiting(false);
@@ -358,11 +354,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }));
           this._reset();
           this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('route-change', {
-            bubbles: true, composed: true, detail: {
-              path: '/home'
-            }
-          }));
+          this._pushState('/home');
         }).catch(err => {
           this._setWaiting(false);
           this.dispatchEvent(new CustomEvent('show-snackbar', {
@@ -392,11 +384,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }));
           this._reset();
           this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('route-change', {
-            bubbles: true, composed: true, detail: {
-              path: '/home'
-            }
-          }));
+          this._pushState('/home');
         }).catch(err => {
           this.dispatchEvent(new CustomEvent('show-snackbar', {
             bubbles: true, composed: true, detail: {

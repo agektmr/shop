@@ -1,2 +1,2 @@
 runtime: nodejs8
-service: second-factor
+service: reauth

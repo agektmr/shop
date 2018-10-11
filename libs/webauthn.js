@@ -5,24 +5,51 @@ const cbor = require('cbor');
 const CredentialStore = require('./credential-store');
 // const { Fido2Lib } = require('fido2-lib');
 
-const createBase64Random = (len = 32) => {
+function createBase64Random(len = 32) {
   return base64url(crypto.randomBytes(len));
+};
+
+function sessionCheck(req, res, next) {
+  const profile = req.session.profile;
+  if (profile) {
+    next();
+  } else {
+    res.status(401).send('Authentication Required');
+  }
+};
+
+function verifyCredential(credential, challenge, origin) {
+  const attestationObject = credential.attestationObject;
+  const authenticatorData = credential.authenticatorData;
+  if (!attestationObject && !authenticatorData)
+    throw 'Invalid request.';
+
+  const clientDataJSON = credential.clientDataJSON;
+  // const signature = credential.signature;
+  // const userHandle = credential.userHandle;
+  const clientData = JSON.parse(base64url.decode(clientDataJSON));
+
+  if (clientData.challenge !== challenge)
+    throw 'Wrong challenge code.';
+
+  if (clientData.origin !== origin)
+    throw 'Wrong origin.';
+
+  const buffer = base64url.toBuffer(attestationObject || authenticatorData);
+  const response = cbor.decodeAllSync(buffer)[0];
+
+  return response;
 };
 
 const router = express.Router();
 
-router.post('/keys', async (req, res) => {
+router.post('/keys', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
-  if (!profile) {
-    res.status(400).send('Unauthorized');
-    return;
-  }
-
   const store = new CredentialStore();
   try {
     const _profile = await store.get(profile.id);
     if (_profile) {
-      res.json(_profile.authenticators || []);
+      res.json(_profile.secondFactors || []);
     } else {
       throw 'Profile not found';
     }
@@ -32,12 +59,9 @@ router.post('/keys', async (req, res) => {
   }
 });
 
-router.post('/makeCred', async (req, res) => {
+router.post('/makeCred', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
-  if (!profile) {
-    res.status(401).send('Not authorized');
-    return;
-  }
+  const reauthFlag = req.query.reauth !== undefined;
   let _profile;
   try {
     const store = new CredentialStore();
@@ -55,7 +79,7 @@ router.post('/makeCred', async (req, res) => {
    *   attestationAttachment? = 'platform' | 'cross-platform',
    *   requireResidentKey? = true | false,
    *   userVerification? = 'required' | 'preferred' | 'discouraged',
-   *  attestation? = 'none' | 'indirect' | 'direct'
+   *   attestation? = 'none' | 'indirect' | 'direct'
    * }
    **/
   // const fido = new Fido2Lib({
@@ -92,9 +116,9 @@ router.post('/makeCred', async (req, res) => {
     name: 'Polykart'
   };
   response.user = {
-    displayName: profile.name || profile.email || 'No name',
+    displayName: _profile.name || _profile.email || 'No name',
     id: createBase64Random(),
-    name: profile.id
+    name: _profile.id
   };
   response.pubKeyCredParams = [{
     type: 'public-key', alg: -7
@@ -102,14 +126,14 @@ router.post('/makeCred', async (req, res) => {
   response.timeout = req.body.timeout || 1000 * 30;
   response.challenge = createBase64Random();
   req.session.challenge = response.challenge;
-  if (_profile.authenticators) {
-    response.excludeCredentials = [];
-    for (let authr of _profile.authenticators) {
+
+  // Only specify `excludeCredentials` when reauthFlag is `false`
+  if (!reauthFlag) {
+    for (let authr of _profile.secondFactors) {
       response.excludeCredentials.push({
-        type: authr.type,
         id: authr.credId,
-        // TODO: How do I get this?
-        // transports: authr.transports
+        type: 'public-key',
+        transports: authr.transports
       });
     }
   }
@@ -143,214 +167,140 @@ router.post('/makeCred', async (req, res) => {
   res.json(response);
 });
 
-router.post('/regCred', async (req, res) => {
+router.post('/regCred', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
-  if (!profile) {
-    console.error('Not signed in');
-    res.status(400).send('Not signed in');
-  }
+  const reauthFlag = req.query.reauth !== undefined;
   const credId = req.body.id;
   const type = req.body.type;
-  if (!req.body.response) {
+  const credential = req.body.response;
+  if (!credId || !type || !credential) {
     res.status(400).send('`response` missing in request');
     return;
-  }
-  const attestationObject = req.body.response.attestationObject;
-  const clientDataJSON = req.body.response.clientDataJSON;
-  // const signature = req.body.response.signature;
-  // const userHandle = req.body.response.userHandle;
-  const clientData = JSON.parse(base64url.decode(clientDataJSON));
-
-  if (clientData.challenge !== req.session.challenge) {
-    res.status(400).send('Wrong challenge code.');
-    return;
-  }
-  if (clientData.origin !== `${req.protocol}://${req.get('host')}`) {
-    res.status(400).send('Wrong origin.');
-    return;
-  }
-
-  const attsBuffer = base64url.toBuffer(attestationObject);
-  const response = cbor.decodeAllSync(attsBuffer)[0];
-console.log(response);
-
-  switch (response.fmt) {
-    case 'none':
-      // Ignore attestation
-      break;
-    case 'fido-u2f':
-    case 'android-safetynet':
-    case 'packed':
-    default:
-      // Not implemented yet
-      console.error('Attestation not supported');
-      break;
   }
 
   // Ignore authenticator for the moment
   const store = new CredentialStore();
+  let _profile;
   try {
-    const _profile = await store.get(profile.id);
-    if (_profile) {
-      // Append new credential
-      if (!_profile.authenticators) {
-        _profile.authenticators = [];
+    _profile = await store.get(profile.id);
+    if (!_profile) {
+      throw 'User profile not found.';
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(400).send(e);
+  }
+
+  try {
+    const challenge = req.session.challenge;
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const response = verifyCredential(credential, challenge, origin);
+
+    switch (response.fmt) {
+      case 'none':
+        // Ignore attestation
+        break;
+      case 'fido-u2f':
+      case 'android-safetynet':
+      case 'packed':
+      default:
+        // Not implemented yet
+        throw 'Attestation not supported';
+    }
+
+    if (reauthFlag) {
+      if (!_profile.reauthKeys) {
+        _profile.reauthKeys = [];
       }
-      const publicKeyCredential = {
+      const credentialData = {
         credId: credId,
         type: type,
+        transports: ['internal'],
         // Ignore attestations for the moment
-        response: response,
+        // response: response,
         created: (new Date()).getTime(),
         last_used: null
       };
-      _profile.authenticators.push(publicKeyCredential);
-
-      store.save(profile.id, _profile);
-      delete _profile['password'];
-      delete _profile['authenticators'];
-      res.json(_profile);
+      _profile.reauthKeys.push(credentialData);
     } else {
-      throw 'User profile not found.';
+      if (!_profile.secondFactors) {
+        _profile.secondFactors = [];
+      }
+      const credentialData = {
+        credId: credId,
+        type: type,
+        transports: ['usb', 'ble', 'nfc', 'internal'],
+        // Ignore attestations for the moment
+        // response: response,
+        created: (new Date()).getTime(),
+        last_used: null
+      };
+      _profile.secondFactors.push(credentialData);
     }
+
+    // Ignore authenticator for the moment
+    await store.save(profile.id, _profile);
+    delete _profile.password;
+    delete _profile.secondFactors;
+    delete _profile.reauthKeys;
+    res.json(_profile);
   } catch (e) {
-    console.error(e);
     res.status(400).send(e);
   }
 });
 
-router.post('/getAsst', async (req, res) => {
-  const response = {};
+router.post('/getAsst', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
-  if (profile) {
-    let _profile;
-    try {
-      const store = new CredentialStore();
-      _profile = await store.get(profile.id);
-      if (!_profile) throw 'Profile not found';
-    } catch (e) {
-      res.status(400).send(e);
-    }
-    /**
-     * Response format:
-     * {
-     *   challenge,
-     *   allowCredentials? = [{
-     *     id,
-     *     type,
-     *     transport?
-     *   }, ...]
-     * }
-     **/
-    response.challenge = createBase64Random();
-    req.session.challenge = response.challenge;
-    if (_profile.authenticators) {
-      response.allowCredentials = [];
-      for (let authr of _profile.authenticators) {
-        response.allowCredentials.push({
-          type: authr.type,
-          id: authr.credId,
-          // TODO: is this really ok?
-          transports: ['usb', 'nfc', 'ble', 'internal']
-        });
-      }
-    }
-
-    res.json(response);
-  } else {
-    res.status(401).send('Not authorized');
-  }
-});
-
-router.post('/authAsst', async (req, res) => {
-  const profile = req.session.profile;
-  if (!profile) {
-    console.error('Not signed in');
-    res.status(400).send('Not signed in');
-  }
-
-  // Ignore authenticator for the moment
-  const store = new CredentialStore();
+  const reauth = req.query.reauth;
   let _profile;
   try {
+    const store = new CredentialStore();
     _profile = await store.get(profile.id);
-    if (!_profile) {
-      throw 'User profile not found.';
-    }
+    if (!_profile) throw 'Profile not found';
   } catch (e) {
-    console.error(e);
     res.status(400).send(e);
   }
 
-  const credId = req.body.id;
-  // const type = req.body.type;
-  if (!req.body.response) {
-    res.status(400).send('`response` missing in request');
-    return;
-  }
-  const authenticatorData = req.body.response.authenticatorData;
-  const clientDataJSON = req.body.response.clientDataJSON;
-  // const signature = req.body.response.signature;
-  // const userHandle = req.body.response.userHandle;
-  const clientData = JSON.parse(base64url.decode(clientDataJSON));
+  const response = {};
+  response.challenge = createBase64Random();
+  req.session.challenge = response.challenge;
 
-  if (clientData.challenge !== req.session.challenge) {
-    res.status(400).send('Wrong challenge code.');
-    return;
-  }
-  if (clientData.origin !== `${req.protocol}://${req.get('host')}`) {
-    res.status(400).send('Wrong origin.');
-    return;
-  }
-
-  let authr = null;
-  if (_profile.authenticators) {
-    for (let _authr of _profile.authenticators) {
-      if (_authr.credId === credId) {
-        authr = _authr;
+  if (reauth) {
+    for (let authr of _profile.reauthKeys) {
+      if (authr.credId == reauth) {
+        response.allowCredentials = [{
+          id: authr.credId,
+          type: 'public-key',
+          transports: authr.transports
+        }];
         break;
       }
     }
+  } else {
+    response.allowCredentials = [];
+    for (let authr of _profile.secondFactors) {
+      response.allowCredentials.push({
+        id: authr.credId,
+        type: 'public-key',
+        transports: authr.transports
+      });
+    }
   }
-  if (!authr) {
-    res.status(400).send('Matching authenticator not found');
-    return;
-  }
 
-//   const authrBuffer = base64url.toBuffer(authenticatorData);
-//   const response = cbor.decodeAllSync(authrBuffer)[0];
-// console.log(response);
-
-//   switch (response.fmt) {
-//     case 'none':
-//       // Ignore attestation
-//       break;
-//     case 'fido-u2f':
-//     case 'android-safetynet':
-//     case 'packed':
-//     default:
-//       // Not implemented yet
-//       throw 'Attestation not supported';
-//   }
-
-  // Update timestamp
-  authr.last_used = (new Date()).getTime();
-  // TODO: Anything else to update?
-
-console.log(_profile);
-  store.save(profile.id, _profile);
-
-  delete _profile['password'];
-  delete _profile['authenticators'];
-  res.json(_profile);
+  res.json(response);
 });
 
-router.post('/remove', async (req, res) => {
+router.post('/authAsst', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
-  if (!profile) {
-    res.status(400).send('Invalid request');
+  const reauth = req.query.reauth !== undefined;
+  const credId = req.body.id;
+  const type = req.body.type;
+  const credential = req.body.response;
+  if (!credId || !type || !credential) {
+    res.status(400).send('`response` missing in request');
     return;
   }
+
   // Ignore authenticator for the moment
   const store = new CredentialStore();
   let _profile;
@@ -359,13 +309,88 @@ router.post('/remove', async (req, res) => {
     if (!_profile) {
       throw 'User profile not found.';
     }
-    if (!_profile.authenticators) {
+  } catch (e) {
+    console.error(e);
+    res.status(400).send(e);
+  }
+
+  try {
+    const challenge = req.session.challenge;
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const response = verifyCredential(credential, challenge, origin);
+
+    switch (response.fmt) {
+      case 'none':
+        // Ignore attestation
+        break;
+      case 'fido-u2f':
+      case 'android-safetynet':
+      case 'packed':
+      default:
+        // Not implemented yet
+        throw 'Attestation not supported';
+    }
+
+    let authr = null;
+    if (reauth) {
+      if (_profile.reauthKeys) {
+        for (let _authr of _profile.reauthKeys) {
+          if (_authr.credId === credId) {
+            authr = _authr;
+            break;
+          }
+        }
+      }
+    } else {
+      if (_profile.secondFactors) {
+        for (let _authr of _profile.secondFactors) {
+          if (_authr.credId === credId) {
+            authr = _authr;
+            break;
+          }
+        }
+      }
+    }
+    if (!authr) {
+      res.status(400).send('Matching authenticator not found');
+      return;
+    }
+
+    // Update timestamp
+    authr.last_used = (new Date()).getTime();
+    // TODO: Anything else to update?
+
+console.log(_profile);
+    store.save(profile.id, _profile);
+
+    delete _profile.password;
+    delete _profile.secondFactors;
+    delete _profile.reauthKeys;
+    _profile.reauth = true;
+    res.json(_profile);
+  } catch (e) {
+    res.status(400).send(e);
+  }
+});
+
+router.post('/remove', sessionCheck, async (req, res) => {
+  const profile = req.session.profile;
+
+  // Ignore authenticator for the moment
+  const store = new CredentialStore();
+  let _profile;
+  try {
+    _profile = await store.get(profile.id);
+    if (!_profile) {
+      throw 'User profile not found.';
+    }
+    if (!_profile.secondFactors) {
       throw 'Authenticator not registered.';
     }
-    for (let i = 0; i < _profile.authenticators.length; i++) {
-      const cred = _profile.authenticators[i];
+    for (let i = 0; i < _profile.secondFactors.length; i++) {
+      const cred = _profile.secondFactors[i];
       if (cred.credId === req.body.credId) {
-        _profile.authenticators.splice(i, 1);
+        _profile.secondFactors.splice(i, 1);
         store.save(profile.id, _profile);
         res.status(200).send({});
         return;

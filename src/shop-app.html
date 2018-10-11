@@ -311,7 +311,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <div class="left-bar-item"></div>
         <div class="logo" main-title><a href="/" aria-label="SHOP Home">SHOP</a></div>
         <div class="account-btn-container">
-          <a href="/account" tabindex="-1">
+          <a href="/settings" tabindex="-1">
             <paper-icon-button
               src="[[profile.iconURL]]"
               icon="[[_computeProfileIcon(profile)]]"
@@ -374,11 +374,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <!-- checkout view -->
       <shop-checkout name="checkout" cart="[[cart]]" total="[[total]]" route="{{subroute}}" g-pay-available="[[gPayAvailable]]" pr-available="[[prAvailable]]"></shop-checkout>
       <!-- settings view -->
-      <shop-settings name="settings" profile="[[profile]]" route="[[subroute]]"></shop-settings>
+      <shop-settings name="settings" profile="[[profile]]" route="{{route}}"></shop-settings>
       <!-- account view -->
-      <shop-account name="account" profile="[[profile]]" route="[[subroute]]" prefilled-email="[[userEmail]]"></shop-account>
+      <shop-account name="account" profile="[[profile]]" route="{{route}}" prefilled-email="[[userEmail]]"></shop-account>
       <!-- change password -->
-      <shop-change-password name="change-password" profile="[[profile]]"></shop-change-password>
+      <shop-change-password name="change-password" profile="[[profile]]" route="{{route}}"></shop-change-password>
 
       <shop-404-warning name="404"></shop-404-warning>
     </iron-pages>
@@ -490,6 +490,26 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           if (page == 'home') {
             this._pageLoaded(Boolean(oldPage));
           // other routes are lazy loaded
+          } else if (this.page == 'change-password') {
+            if (!this.accountData) {
+              this.page = 'home';
+              return;
+            }
+            // Check session status
+            this.accountData.checkSession()
+            .then(profile => {
+              // If not short session is not available, reauth
+              if (!profile || !profile.reauth)
+                return this.accountData.reauth();
+            }).then(profile => {
+              // If reauth failed, try regular auth
+              if (!profile) {
+                this.set('route.path', '/settings');
+              }
+            }).catch(e => {
+              console.error(e);
+              this.set('route.path', '/settings');
+            });
           } else {
             // When a load failed, it triggered a 404 which means we need to
             // eagerly load the 404 page definition
@@ -737,16 +757,17 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }, 2000);
       }
 
-      _autoLogin() {
+      _autoLogin(e) {
+        e.stopPropagation();
         this.accountData = this.$.meta.byKey('account');
 
         // If already signed in, no need to auto sign-in.
-        this.accountData.resumeSession().then(profile => {
-          if (!profile) return Promise.resolve(null);
-        }, e => {
-          return Promise.resolve(null);
-        }).then(profile => {
-          return this.accountData.autoSignIn(true);
+        this.accountData.checkSession().then(profile => {
+          if (!profile) {
+            return this.accountData.autoSignIn(true);
+          } else {
+            return profile;
+          }
         }).then(profile => {
           if (!profile) {
             console.info('Failed to auto login');

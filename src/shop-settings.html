@@ -12,12 +12,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <link rel="import" href="../bower_components/app-route/app-route.html">
 <link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
 <link rel="import" href="../bower_components/iron-meta/iron-meta.html">
+<link rel="import" href="../bower_components/paper-toggle-button/paper-toggle-button.html">
 <link rel="import" href="shop-button.html">
 <link rel="import" href="shop-common-styles.html">
 <link rel="import" href="shop-form-styles.html">
 <link rel="import" href="shop-input.html">
 <link rel="import" href="shop-select.html">
 <link rel="import" href="shop-cred-item.html">
+<link rel="import" href="shop-select.html">
 
 <dom-module id="shop-settings">
 
@@ -109,6 +111,20 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin-right: 10px;
       }
 
+      .settings-box {
+        margin: 64px 0;
+        border-bottom: 1px solid #ccc;
+      }
+
+      .settings-menu {
+        display: flex;
+        justify-content: space-between;
+        padding: 16px 24px;
+        text-align: left;
+        border-top: 1px solid #ccc;
+        font-size: 16px;
+        line-height: 40px;
+      }
 
       @media (max-width: 767px) {
         .login-form {
@@ -120,7 +136,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div class="main-frame">
       <iron-meta id="account" type="account"></iron-meta>
 
-      <div class="welcome">
+      <div class="welcome" visible$="[[!_hasAccount]]">
         <span>Thanks for shopping with us! Why don't you create an account and get 10% discount now?</span>
       </div>
 
@@ -130,6 +146,39 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       <div class="subsection welcome" visible$="[[_hasAccount]]">
         <span>Welcome to Polymer Shop, {{profile.email}}!</span>
+
+        <div class="settings-box">
+          <div class="settings-menu">
+            <label for="email-settings">Email</label>
+            <paper-icon-button
+              icon="keyboard-arrow-right"
+              id="email-settings">
+            </paper-icon-button>
+          </div>
+
+          <div class="settings-menu">
+            <label for="password-settings">Password</label>
+            <paper-icon-button
+              on-tap="_onChangePasswordLink"
+              icon="keyboard-arrow-right"
+              id="password-settings">
+            </paper-icon-button>
+          </div>
+
+          <div class="settings-menu">
+            <label for="screenlock-settings">Fingerprint reauth</label>
+            <!-- <paper-toggle-button
+              on-change="_onReauthChanged"
+              checked="{{_reauthEnabled}}"
+              id="screenlock-settings"
+              disabled="[[!_isUVPAA]]"> -->
+            <paper-toggle-button
+              on-change="_onReauthChanged"
+              checked="{{_reauthEnabled}}"
+              id="screenlock-settings">
+            </paper-toggle-button>
+          </div>
+        </div>
 
         <div class="logout-section">
           <shop-button responsive id="logoutButton">
@@ -174,11 +223,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <input type="button" on-click="_onSignUp" value="Sign Up">
             <input type="button" on-click="_onSignIn" value="Log In">
           </shop-button>
-
-          <!-- <div class="google-signin" on-click="_onGSignIn">
-            <img src="/images/google_signin.png">
-          </div> -->
-
         </form>
       </div>
     </div>
@@ -218,6 +262,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           value: []
         },
 
+        reauthEnabled: {
+          type: Boolean,
+          value: false
+        },
+
         /**
          * Object containing profile data.
          */
@@ -252,8 +301,17 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         _hasAccount: {
           computed: '_computeHasAccount(profile.id)'
-        }
+        },
 
+        _reauthEnabled: {
+          type: Boolean,
+          value: false
+        },
+
+        _isUVPAA: {
+          type: Boolean,
+          value: false
+        }
       }}
 
       ready() {
@@ -269,6 +327,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       _init() {
         this.accountData = this.$.account.byKey('account');
+        // TODO: Check sign-in status
+        // TODO: See if short-lived session is required
+        // TODO: If required, redirect the user
+        // TODO: And let the user sign-in using fingerprint
+        this._isUVPAA = this.accountData.isUVPAA;
+        this._reauthEnabled = this.accountData.reauthAvailable();
         this.accountData.getKeys().then(keys => {
           this.keys = keys;
         }).catch(e => {
@@ -302,11 +366,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             }
           }));
           this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('route-change', {
-            bubbles: true, composed: true, detail: {
-              path: '/home'
-            }
-          }));
+          this._pushState('/home');
         }, err => {
           console.error(err);
           this._setWaiting(false);
@@ -337,11 +397,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }));
           this._reset();
           this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('route-change', {
-            bubbles: true, composed: true, detail: {
-              path: '/home'
-            }
-          }));
+          this._pushState('/home');
         }).catch(err => {
           this._setWaiting(false);
           this.dispatchEvent(new CustomEvent('show-snackbar', {
@@ -371,11 +427,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           }));
           this._reset();
           this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('route-change', {
-            bubbles: true, composed: true, detail: {
-              path: '/home'
-            }
-          }));
+          this._pushState('/home');
         }).catch(err => {
           this.dispatchEvent(new CustomEvent('show-snackbar', {
             bubbles: true, composed: true, detail: {
@@ -463,6 +515,26 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.dispatchEvent(new CustomEvent('show-snackbar', {
           bubbles: true, composed: true, detail: { text: msg }
         }));
+      }
+
+      async _onReauthChanged(e) {
+        let msg;
+        e.stopPropagation();
+        if (e.target.checked === true) {
+          await this.accountData.registerReauthKey();
+          msg = 'Fingerprint reauth enabled.';
+        } else {
+          await this.accountData.removeReauthKey();
+          msg = 'Fingerprint reauth disabled.';
+        }
+        this.dispatchEvent(new CustomEvent('show-snackbar', {
+          bubbles: true, composed: true, detail: { text: msg }
+        }));
+        console.log(e);
+      }
+
+      _onChangePasswordLink() {
+        this._pushState('/change-password');
       }
 
       /**

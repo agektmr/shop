@@ -6,6 +6,7 @@ const upload = multer();
 const CredentialStore = require('./credential-store');
 
 router.post('/session', (req, res) => {
+  // TODO: provide reauth status
   if (req.session.profile) {
     const profile = req.session.profile;
     res.json(profile);
@@ -177,7 +178,7 @@ router.post('/unregister', upload.array(), async (req, res) => {
 });
 
 router.post('/signout', (req, res) => {
-  req.session.profile = null;
+  delete req.session.profile;
   res.json({});
 });
 
