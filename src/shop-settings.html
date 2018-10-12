@@ -136,20 +136,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div class="main-frame">
       <iron-meta id="account" type="account"></iron-meta>
 
-      <div class="welcome" visible$="[[!_hasAccount]]">
-        <span>Thanks for shopping with us! Why don't you create an account and get 10% discount now?</span>
-      </div>
-
-      <div class="subsection thanks" visible$="[[_computeSigningUp(route)]]">
-        <span>Your order has been successfully placed.</span>
-      </div>
-
-      <div class="subsection welcome" visible$="[[_hasAccount]]">
+      <div class="welcome">
         <span>Welcome to Polymer Shop, {{profile.email}}!</span>
 
         <div class="settings-box">
           <div class="settings-menu">
-            <label for="email-settings">Email</label>
+            <label for="email-settings">Change Email</label>
             <paper-icon-button
               icon="keyboard-arrow-right"
               id="email-settings">
@@ -157,7 +149,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           </div>
 
           <div class="settings-menu">
-            <label for="password-settings">Password</label>
+            <label for="password-settings">Change Password</label>
             <paper-icon-button
               on-tap="_onChangePasswordLink"
               icon="keyboard-arrow-right"
@@ -165,7 +157,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             </paper-icon-button>
           </div>
 
-          <div class="settings-menu hidden" visible$="[[!_isUVPAA]]">
+          <div class="settings-menu hidden" visible$="{{_isUVPAA}}">
             <label for="screenlock-setting">Fingerprint reauth</label>
             <paper-toggle-button
               on-change="_onReauthChanged"
@@ -180,45 +172,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <input type="submit" on-click="_logout" value="Logout">
           </shop-button>
         </div>
-      </div>
-
-      <div class="login-section hidden" visible$="[[!_hasAccount]]">
-        <form action="#" id="loginForm"
-            is="iron-form"
-            method="post"
-            on-iron-form-presubmit="_willSendRequest">
-
-          <div class="row input-row">
-            <shop-input>
-              <input type="email" id="accountEmail" name="email"
-                  placeholder="Email" required
-                  aria-labelledby="accountEmailLabel"
-                  autocomplete="username" value$="[[prefilledEmail]]">
-              <shop-md-decorator error-message="Invalid Email" aria-hidden="true">
-                <label id="accountEmailLabel">Email</label>
-                <shop-underline></shop-underline>
-              </shop-md-decorator>
-            </shop-input>
-          </div>
-
-          <div class="row input-row">
-            <shop-input>
-              <input type="password" id="accountPassword" name="password"
-                  placeholder="Password" required
-                  aria-labelledby="accountPasswordLabel"
-                  autocomplete="current-password">
-              <shop-md-decorator error-message="Invalid Password" aria-hidden="true">
-                <label id="accountPasswordLabel">Password</label>
-                <shop-underline></shop-underline>
-              </shop-md-decorator>
-            </shop-input>
-          </div>
-
-          <shop-button responsive id="loginButton">
-            <input type="button" on-click="_onSignUp" value="Sign Up">
-            <input type="button" on-click="_onSignIn" value="Log In">
-          </shop-button>
-        </form>
       </div>
     </div>
 
@@ -294,10 +247,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           reflectToAttribute: true
         },
 
-        _hasAccount: {
-          computed: '_computeHasAccount(profile.id)'
-        },
-
         _reauthEnabled: {
           type: Boolean,
           value: false
@@ -309,29 +258,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }}
 
-      ready() {
-        super.ready();
-        if (this.$.account.byKey('account')) {
-          this._init();
-        } else {
-          window.addEventListener('account-data-ready', e => {
-            this._init();
-          });
-        }
-      }
-
-      _init() {
+      _authenticate() {
         this.accountData = this.$.account.byKey('account');
-        // TODO: Check sign-in status
-        // TODO: See if short-lived session is required
-        // TODO: If required, redirect the user
-        // TODO: And let the user sign-in using fingerprint
         this._isUVPAA = this.accountData.isUVPAA;
         this._reauthEnabled = this.accountData.reauthAvailable();
-        this.accountData.getKeys().then(keys => {
-          this.keys = keys;
-        }).catch(e => {
-          console.error('Failed to obtain authenticator keys.');
+        // this.accountData.getKeys().then(keys => {
+        //   this.keys = keys;
+        // }).catch(e => {
+        //   console.error('Failed to obtain authenticator keys.');
+        // });
+        this.accountData.checkSession(1)
+        .catch(e => {
+          this.set('route.path', '/account/signin');
         });
       }
 
@@ -341,96 +279,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         } else {
           return false;
         }
-      }
-
-      _computeSigningUp(route) {
-        return route.path === '/signup';
-      }
-
-      _computeFocusOnPW(route, prefilledEmail) {
-        return route.path === '/signup' && prefilledEmail.length > 0;
-      }
-
-      _onGSignIn() {
-        this._setWaiting(true);
-        this.accountData.gSignIn()
-        .then(() => {
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'You are signed in!'
-            }
-          }));
-          this._setWaiting(false);
-          this._pushState('/home');
-        }, err => {
-          console.error(err);
-          this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'Sign-In failed'
-            }
-          }));
-        });
-      }
-
-      _onSignUp(evt) {
-        console.log("begin _onSignUp");
-        evt.preventDefault();
-        this._setWaiting(true);
-
-        this.$.loginForm.dispatchEvent(new CustomEvent('iron-form-presubmit',  {
-          bubbles: false, composed: true }));
-
-        var form = new FormData(this.$.loginForm);
-
-        this.accountData.pSignUp(form)
-        .then(profile => {
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'Thanks for signing up!'
-            }
-          }));
-          this._reset();
-          this._setWaiting(false);
-          this._pushState('/home');
-        }).catch(err => {
-          this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'Sign-Up failed'
-            }
-          }));
-        });
-      }
-
-      _onSignIn(evt) {
-        console.log("begin _onSignIn");
-        evt.preventDefault();
-        this._setWaiting(true);
-
-        this.$.loginForm.dispatchEvent(new CustomEvent('iron-form-presubmit',  {
-          bubbles: false, composed: true }));
-
-        var form = new FormData(this.$.loginForm);
-
-        this.accountData.pSignIn(form)
-        .then(profile => {
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'You are signed in!'
-            }
-          }));
-          this._reset();
-          this._setWaiting(false);
-          this._pushState('/home');
-        }).catch(err => {
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'Sign-In failed'
-            }
-          }));
-          this._setWaiting(false);
-        });
       }
 
       /**
@@ -445,23 +293,28 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this._setWaiting(true);
       }
 
-      _logout(evt) {
-        evt.preventDefault();
-
-        this._reset();
+      _logout(e) {
         this.dispatchEvent(new CustomEvent('logout', {
           bubbles: true, composed: true
         }));
+        this._pushState('/');
       }
 
       _visibleChanged(visible) {
         if (!visible) {
           return;
         }
-        this._reset();
-        this.dispatchEvent(new CustomEvent('change-section', {
+        if (this.$.account.byKey('account')) {
+          this._authenticate();
+        } else {
+          window.addEventListener('account-data-ready', e => {
+            this._authenticate();
+          });
+        }
+        // this._reset();
+        this.dispatchEvent(new CustomEvent('settings', {
           bubbles: true, composed: true, detail: {
-            title: 'Account'
+            title: 'Settings'
           }
         }));
       }
@@ -536,21 +389,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       _onChangePasswordLink() {
         this._pushState('/change-password');
-      }
-
-      /**
-       * Sets the initial state.
-       */
-      _reset() {
-        var form = this.$.loginForm;
-
-        this._setWaiting(false);
-        form.reset();
-
-        // Remove the `aria-invalid` attribute from the form inputs.
-        for (var el, i = 0; el = form.elements[i], i < form.elements.length; i++) {
-          el.removeAttribute('aria-invalid');
-        }
       }
     };
 

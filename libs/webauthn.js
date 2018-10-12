@@ -76,7 +76,7 @@ router.post('/keys', sessionCheck, async (req, res) => {
   }
 });
 
-router.post('/makeCred', shortSessionCheck, async (req, res) => {
+router.post('/makeCred', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
   const reauthFlag = req.query.reauth !== undefined;
   let _profile;
@@ -184,7 +184,7 @@ router.post('/makeCred', shortSessionCheck, async (req, res) => {
   res.json(response);
 });
 
-router.post('/regCred', shortSessionCheck, async (req, res) => {
+router.post('/regCred', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
   const reauthFlag = req.query.reauth !== undefined;
   const credId = req.body.id;

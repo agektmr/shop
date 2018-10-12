@@ -23,6 +23,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     const PCHANGE = '/auth/change-password';
     const GOOGLE = '/auth/google';
     const GOOGLE_FEDERATION = 'https://accounts.google.com'
+    const WEBAUTHN_MAKECRED = '/webauthn/makeCred';
+    const WEBAUTHN_REGCRED = '/webauthn/regCred';
+    const WEBAUTHN_GETASST = '/webauthn/getAsst';
+    const WEBAUTHN_AUTHASST = '/webauthn/authAsst';
+    const WEBAUTHN_REMOVE = '/webauthn/remove';
+    const WEBAUTHN_KEYS = '/webauthn/keys';
+    const REAUTH_DURATION = 1000 * 60 * 5; // 5 minutes
 
     class ShopAccountData extends Polymer.Element {
 
@@ -62,18 +69,16 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
           .then(result => {
             this.isUVPAA = result;
+            this.dispatchEvent(new CustomEvent('account-data-ready', {
+              bubbles: true, composed: true
+            }));
           });
         } else {
           return this.isUVPAA = false;
+          this.dispatchEvent(new CustomEvent('account-data-ready', {
+            bubbles: true, composed: true
+          }));
         }
-        // gapi.load('auth2', () => {
-        //   gapi.auth2.init().then(() => {
-            this.dispatchEvent(new CustomEvent('account-data-ready', {
-              bubbles: true,
-              composed: true
-            }));
-        //   })
-        // });
       }
 
       isSignedIn() {
@@ -90,15 +95,29 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         };
       }
 
-      async checkSession() {
-        try {
-          const profile = await this._fetch(SESSION);
-          this.setProfile(profile);
+      checkSession(authLevel = 0) {
+        return this._fetch(SESSION).then(profile => {
+          // If authLevel is 2 or above, examine sign-in status.
+          if (authLevel >= 2 && profile) {
+            const now = (new Date()).getTime();
+            const acceptable = now - REAUTH_DURATION;
+            // If last reauth time not acceptable, execute reauth
+            if (!profile.reauth || profile.reauth < acceptable) {
+              return this.reauth();
+            }
+          }
           return profile;
-        } catch (e) {
-          this._initializeProfile();
-          return null;
-        }
+        }).then(profile => {
+          if (authLevel >= 1 && !profile) {
+            throw 'No profile';
+          }
+          if (profile) {
+            this.setProfile(profile);
+          } else {
+            this._initializeProfile();
+          }
+          return profile;
+        });
       }
 
       _initializeProfile() {
@@ -261,13 +280,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       _removeReauthData() {
         const credId = localStorage.getItem('reauth');
-        this._fetch('/webauthn/remove', {
-          credId: credId
-        });
         localStorage.removeItem('reauth');
+        return credId;
       }
 
       async registerReauthKey() {
+        if (!window.PublicKeyCredential) {
+          throw 'WebAuthn not supported on this browser.';
+        }
         // If reauth key is already registered, throw an exception
         if (this._getReauthData() !== null) {
           return Promise.reject('Reauth key alrady registered.');
@@ -279,7 +299,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         opts.authenticatorSelection.userVerification = 'required';
 
         try {
-          const options = await this._fetch('/webauthn/makeCred?reauth', opts);
+          const options = await this._fetch(`${WEBAUTHN_MAKECRED}?reauth`, opts);
 console.log('Response from makeCred', options);
 
           options.user.id = base64url.decode(options.user.id);
@@ -300,7 +320,7 @@ console.log('Response of `navigator.credentials.get()`', cred);
 
           const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
 
-          const profile = await this._fetch('/webauthn/regCred?reauth', parsedCred);
+          const profile = await this._fetch('webauthn/regCred?reauth', parsedCred);
 
           this._setReauthData(parsedCred.id);
 
@@ -312,16 +332,19 @@ console.log('Response of `navigator.credentials.get()`', cred);
       }
 
       async removeReauthKey() {
-        const url = `/webauthn/removeReauth?reauth=${encodeURIComponent(credId)}`;
-        await this._fetch(url);
-        this._removeReauthData();
-        return Promise.resolve();
+        const credId = this._removeReauthData();
+        const url = `${WEBAUTHN_REMOVE}?reauth=${encodeURIComponent(credId)}`;
+        return await this._fetch(url);
       }
 
       async reauth() {
+        if (!window.PublicKeyCredential) {
+          throw 'WebAuthn not supported on this browser.';
+        }
+
         const credId = this._getReauthData();
         try {
-          const url =`/webauthn/getAsst?reauth=${encodeURIComponent(credId)}`;
+          const url =`${WEBAUTHN_GETASST}?reauth=${encodeURIComponent(credId)}`;
           const options = await this._fetch(url);
 
   console.log('Response from getAsst', options);
@@ -340,7 +363,7 @@ console.log('Response of `navigator.credentials.get()`', cred);
 
           const parsedCred = await this._encodeAuthenticatorAssertionResponse(cred);
 
-          return await this._fetch('/webauthn/authAsst?reauth', parsedCred);
+          return await this._fetch(`${WEBAUTHN_AUTHASST}?reauth`, parsedCred);
         } catch (e) {
           console.error(e);
           throw 'Reauth failed!';
@@ -348,8 +371,11 @@ console.log('Response of `navigator.credentials.get()`', cred);
       }
 
       async getKeys() {
+        if (!window.PublicKeyCredential) {
+          throw 'WebAuthn not supported on this browser.';
+        }
         try {
-          return await this._fetch('/webauthn/keys');
+          return await this._fetch(WEBAUTHN_KEYS);
         } catch (e) {
           return Promise.reject(e);
         }
@@ -406,8 +432,11 @@ console.log('Response of `navigator.credentials.get()`', cred);
       }
 
       async registerCredential(opts) {
+        if (!window.PublicKeyCredential) {
+          throw 'WebAuthn not supported on this browser.';
+        }
         try {
-          const options = await this._fetch('/webauthn/makeCred', opts);
+          const options = await this._fetch(`${WEBAUTHN_MAKECRED}`, opts);
 
 console.log('Response from makeCred', options);
 
@@ -430,7 +459,7 @@ console.log('Response of `navigator.credentials.get()`', cred);
 
           const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
 
-          return await this._fetch('/webauthn/regCred', parsedCred);
+          return await this._fetch(`${WEBAUTHN_REGCRED}`, parsedCred);
 
         } catch (e) {
           console.error(e);
@@ -440,7 +469,7 @@ console.log('Response of `navigator.credentials.get()`', cred);
 
       async assertCredential() {
         try {
-          const options = await this._fetch('/webauthn/getAsst');
+          const options = await this._fetch(`${WEBAUTHN_GETASST}`);
 
 console.log('Response from getAsst', options);
 
@@ -478,15 +507,18 @@ console.log('Response from getAsst', options);
             };
           }
 
-          const result = await this._fetch('/webauthn/authAsst', credential);
+          const result = await this._fetch(`${WEBAUTHN_AUTHASST}`, credential);
         } catch (e) {
           return Promise.reject(e);
         }
       }
 
       async removeCredential(credId) {
+        if (!window.PublicKeyCredential) {
+          throw 'WebAuthn not supported on this browser.';
+        }
         try {
-          await this._fetch('/webauthn/remove', { credId })
+          await this._fetch(WEBAUTHN_REMOVE, { credId })
           return;
         } catch (e) {
           return Promise.reject(e);

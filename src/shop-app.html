@@ -376,7 +376,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <!-- settings view -->
       <shop-settings name="settings" profile="[[profile]]" route="{{route}}"></shop-settings>
       <!-- account view -->
-      <shop-account name="account" profile="[[profile]]" route="{{route}}" prefilled-email="[[userEmail]]"></shop-account>
+      <shop-account name="account" profile="[[profile]]" route="{{route}}" subroute="{{subroute}}" prefilled-email="[[userEmail]]"></shop-account>
       <!-- change password -->
       <shop-change-password name="change-password" profile="[[profile]]" route="{{route}}"></shop-change-password>
 
@@ -469,8 +469,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         Polymer.RenderStatus.afterNextRender(this, () => {
           window.addEventListener('online', (e)=>this._notifyNetworkStatus(e));
           window.addEventListener('offline', (e)=>this._notifyNetworkStatus(e));
-          window.addEventListener('account-data-ready', (e)=>this._autoLogin(e));
+          // window.addEventListener('account-data-ready', (e)=>this._autoLogin(e));
+          window.addEventListener('account-data-ready', (e)=>this._init(e));
         });
+      }
+
+      _init() {
+        this.accountData = this.$.meta.byKey('account');
+        this.accountData.checkSession(0);
       }
 
       _routePageChanged(page) {
@@ -489,38 +495,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           // home route is eagerly loaded
           if (page == 'home') {
             this._pageLoaded(Boolean(oldPage));
-          // other routes are lazy loaded
-          } else if (this.page == 'change-password') {
-            if (!this.accountData) {
-              this.page = 'home';
-              return;
-            }
-            // Check session status
-            this.accountData.checkSession()
-            .then(profile => {
-              // If not short session is not available, reauth
-              if (!profile || !profile.reauth)
-                return this.accountData.reauth();
-            }).then(profile => {
-              // If reauth failed, try regular auth
-              if (!profile) {
-                this.set('route.path', '/settings');
-                return;
-              }
-              this.dispatchEvent(new CustomEvent('show-snackbar', {
-                bubbles: true, composed: true, detail: {
-                  text: 'Reauth successful!'
-                }
-              }));
-            }).catch(e => {
-              console.error(e);
-              this.dispatchEvent(new CustomEvent('show-snackbar', {
-                bubbles: true, composed: true, detail: {
-                  text: e
-                }
-              }));
-              this.set('route.path', '/settings');
-            });
           } else {
             // When a load failed, it triggered a 404 which means we need to
             // eagerly load the 404 page definition
@@ -769,7 +743,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       _autoLogin(e) {
-        e.stopPropagation();
         this.accountData = this.$.meta.byKey('account');
 
         // If already signed in, no need to auto sign-in.

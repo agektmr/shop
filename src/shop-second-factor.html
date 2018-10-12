@@ -57,20 +57,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin-left: 8px;
       }
 
-      .signin-section {
+      .login-section {
         text-align: left;
         width: 50%;
         margin: auto;
       }
 
-      .signup-section {
-        text-align: left;
-        width: 50%;
-        margin: auto;
-      }
-
-      .signout-section {
+      .logout-section {
         margin: 8px;
+      }
+
+      .second-factor-section {
+        margin: 64px 8px 8px 8px;
       }
 
       .welcome {
@@ -84,16 +82,16 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin: 26px 0;
       }
 
-      .signing-button {
+      .login-section:not([visible]) {
+        display: none;
+      }
+
+      #loginButton {
         @apply(--layout-horizontal);
         @apply(--layout-around-justified);
       }
 
-      .hidden:not([visible]) {
-        display: none;
-      }
-
-      /* .google-signin {
+      .google-signin {
         @apply(--layout-horizontal);
         @apply(--layout-center-justified);
         margin-top: 18px;
@@ -103,10 +101,17 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       .google-signin img {
         width: 191px;
         height: 46px;
-      } */
+      }
+
+      .new-key-section {
+        font-weight: bold;
+        text-align: right;
+        margin-right: 10px;
+      }
+
 
       @media (max-width: 767px) {
-        .signin-form {
+        .login-form {
           width: 100%;
         }
       }
@@ -119,12 +124,43 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <span>Thanks for shopping with us! Why don't you create an account and get 10% discount now?</span>
       </div>
 
-      <div class="thanks hidden" visible$="[[_computeSigningUp(subroute)]]">
+      <div class="subsection thanks" visible$="[[_computeSigningUp(route)]]">
         <span>Your order has been successfully placed.</span>
       </div>
 
-      <div class="signin-section">
-        <form action="#" id="signinForm"
+      <div class="subsection welcome" visible$="[[_hasAccount]]">
+        <span>Welcome to Polymer Shop, {{profile.email}}!</span>
+
+        <div class="logout-section">
+          <shop-button responsive id="logoutButton">
+            <input type="submit" on-click="_logout" value="Logout">
+          </shop-button>
+        </div>
+
+        <div class="second-factor-section">
+          <header>
+            <h2>Register second factors for better security</h2>
+          </header>
+          <div class="keylist">
+            <dom-repeat items="[[keys]]" as="entry">
+              <template>
+                <shop-cred-item on-remove-cred="_onRemoveCred" entry="[[entry]]"></shop-cred-item>
+              </template>
+            </dom-repeat>
+          </div>
+          <div class="new-key-section">
+            <shop-button>
+              <input type="submit" on-click="_tryAKey" value="Try a Key">
+            </shop-button>
+            <shop-button>
+              <input type="submit" on-click="_addNewKey" value="Add New Key">
+            </shop-button>
+          </div>
+        </div>
+      </div>
+
+      <div class="login-section" visible$="[[!_hasAccount]]">
+        <form action="#" id="loginForm"
             is="iron-form"
             method="post"
             on-iron-form-presubmit="_willSendRequest">
@@ -155,17 +191,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             </shop-input>
           </div>
 
-          <shop-button
-            class="signing-button hidden"
-            responsive
-            visible$="[[_computeIsSignUp]]">
+          <shop-button responsive id="loginButton">
             <input type="button" on-click="_onSignUp" value="Sign Up">
-          </shop-button>
-
-          <shop-button
-            class="signing-button hidden"
-            responsive
-            visible$="[[_computeIsSignIn]]">
             <input type="button" on-click="_onSignIn" value="Log In">
           </shop-button>
 
@@ -194,11 +221,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
          * `checkout/` route.
          */
         route: {
-          type: Object,
-          notify: true
-        },
-
-        subroute: {
           type: Object,
           notify: true
         },
@@ -249,25 +271,30 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           reflectToAttribute: true
         },
 
-        _computeIsSignUp: {
-          computed: '_computeCheckPath("signup")'
-        },
-
-        _computeIsSignIn: {
-          computed: '_computeCheckPath("signin")'
+        _hasAccount: {
+          computed: '_computeHasAccount(profile.id)'
         }
 
       }}
 
-      _authenticate() {
+      ready() {
+        super.ready();
+        if (this.$.account.byKey('account')) {
+          this._init();
+        } else {
+          window.addEventListener('account-data-ready', e => {
+            this._init();
+          });
+        }
+      }
+
+      _init() {
         this.accountData = this.$.account.byKey('account');
-        this.accountData.checkSession()
-        .then(profile => {
-          if (profile) {
-            // TODO: Continue to next page
-            this._pushState('/settings');
-          }
-        }).catch(e => {});
+        this.accountData.getKeys().then(keys => {
+          this.keys = keys;
+        }).catch(e => {
+          console.error('Failed to obtain authenticator keys.');
+        });
       }
 
       _computeHasAccount(id) {
@@ -278,17 +305,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
-      _computeCheckPath(path) {
-console.log(path, this.subroute.path);
-        return this.subroute.path == `/${path}`;
+      _computeSigningUp(route) {
+        return route.path === '/signup';
       }
 
-      _computeSigningUp(subroute) {
-        return subroute.path === '/signup';
-      }
-
-      _computeFocusOnPW(subroute, prefilledEmail) {
-        return subroute.path === '/signup' && prefilledEmail.length > 0;
+      _computeFocusOnPW(route, prefilledEmail) {
+        return route.path === '/signup' && prefilledEmail.length > 0;
       }
 
       _onGSignIn() {
@@ -301,7 +323,7 @@ console.log(path, this.subroute.path);
             }
           }));
           this._setWaiting(false);
-          this._pushState('/');
+          this._pushState('/home');
         }, err => {
           console.error(err);
           this._setWaiting(false);
@@ -318,10 +340,10 @@ console.log(path, this.subroute.path);
         evt.preventDefault();
         this._setWaiting(true);
 
-        this.$.signinForm.dispatchEvent(new CustomEvent('iron-form-presubmit',  {
+        this.$.loginForm.dispatchEvent(new CustomEvent('iron-form-presubmit',  {
           bubbles: false, composed: true }));
 
-        var form = new FormData(this.$.signinForm);
+        var form = new FormData(this.$.loginForm);
 
         this.accountData.pSignUp(form)
         .then(profile => {
@@ -332,7 +354,7 @@ console.log(path, this.subroute.path);
           }));
           this._reset();
           this._setWaiting(false);
-          this._pushState('/');
+          this._pushState('/home');
         }).catch(err => {
           this._setWaiting(false);
           this.dispatchEvent(new CustomEvent('show-snackbar', {
@@ -344,13 +366,14 @@ console.log(path, this.subroute.path);
       }
 
       _onSignIn(evt) {
+        console.log("begin _onSignIn");
         evt.preventDefault();
         this._setWaiting(true);
 
-        this.$.signinForm.dispatchEvent(new CustomEvent('iron-form-presubmit',  {
+        this.$.loginForm.dispatchEvent(new CustomEvent('iron-form-presubmit',  {
           bubbles: false, composed: true }));
 
-        var form = new FormData(this.$.signinForm);
+        var form = new FormData(this.$.loginForm);
 
         this.accountData.pSignIn(form)
         .then(profile => {
@@ -361,7 +384,7 @@ console.log(path, this.subroute.path);
           }));
           this._reset();
           this._setWaiting(false);
-          this._pushState('/');
+          this._pushState('/home');
         }).catch(err => {
           this.dispatchEvent(new CustomEvent('show-snackbar', {
             bubbles: true, composed: true, detail: {
@@ -384,11 +407,11 @@ console.log(path, this.subroute.path);
         this._setWaiting(true);
       }
 
-      _signout(evt) {
+      _logout(evt) {
         evt.preventDefault();
 
         this._reset();
-        this.dispatchEvent(new CustomEvent('signout', {
+        this.dispatchEvent(new CustomEvent('logout', {
           bubbles: true, composed: true
         }));
       }
@@ -397,15 +420,6 @@ console.log(path, this.subroute.path);
         if (!visible) {
           return;
         }
-
-        if (this.$.account.byKey('account')) {
-          this._authenticate();
-        } else {
-          window.addEventListener('account-data-ready', e => {
-            this._authenticate();
-          });
-        }
-
         this._reset();
         this.dispatchEvent(new CustomEvent('change-section', {
           bubbles: true, composed: true, detail: {
@@ -464,7 +478,7 @@ console.log(path, this.subroute.path);
        * Sets the initial state.
        */
       _reset() {
-        var form = this.$.signinForm;
+        var form = this.$.loginForm;
 
         this._setWaiting(false);
         form.reset();
