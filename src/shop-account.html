@@ -249,6 +249,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           reflectToAttribute: true
         },
 
+        _isReauth: {
+          computed: '_computeIsReauth(subroute.path)'
+        },
+
         _computeIsSignUp: {
           computed: '_computeCheckPath("signup")'
         },
@@ -263,7 +267,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.accountData = this.$.account.byKey('account');
         this.accountData.checkSession()
         .then(profile => {
-          if (profile) {
+          if (!this._isReauth && profile) {
             // TODO: Continue to next page
             this._pushState('/settings');
           }
@@ -278,9 +282,21 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
+      _computeIsReauth(path) {
+        return path === '/reauth';
+      }
+
       _computeCheckPath(path) {
-console.log(path, this.subroute.path);
-        return this.subroute.path == `/${path}`;
+        if (path == 'signin' &&
+           (this.subroute.path == '/signin' ||
+            this._isReauth)) {
+          return true;
+        } else if (path === 'signup' &&
+            this.subroute.path == '/signup') {
+          return true;
+        } else {
+          return false;
+        }
       }
 
       _computeSigningUp(subroute) {
@@ -314,7 +330,6 @@ console.log(path, this.subroute.path);
       }
 
       _onSignUp(evt) {
-        console.log("begin _onSignUp");
         evt.preventDefault();
         this._setWaiting(true);
 
@@ -352,8 +367,13 @@ console.log(path, this.subroute.path);
 
         var form = new FormData(this.$.signinForm);
 
-        this.accountData.pSignIn(form)
-        .then(profile => {
+        let promise;
+        if (this._isReauth) {
+          promise = this.accountData.pReauth(form);
+        } else {
+          promise = this.accountData.pSignIn(form)
+        }
+        promise.then(profile => {
           this.dispatchEvent(new CustomEvent('show-snackbar', {
             bubbles: true, composed: true, detail: {
               text: 'You are signed in!'

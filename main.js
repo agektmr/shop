@@ -20,7 +20,7 @@ const auth = require('./libs/auth');
 const webauthn = require('./libs/webauthn');
 const common = require('./libs/common');
 
-const AUTH_DURATION = 1000 * 60 * 60 * 24;
+const AUTH_DURATION = 1000 * 60 * 60 * 24 * 365;
 
 const app = express();
 app.enable('trust proxy');

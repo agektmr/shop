@@ -91,7 +91,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           name: profile.name,
           id: profile.id,
           iconURL: profile.imageUrl,
-          email: profile.email
+          email: profile.email,
+          reauth: profile.reauth || 0
         };
       }
 
@@ -103,7 +104,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             const acceptable = now - REAUTH_DURATION;
             // If last reauth time not acceptable, execute reauth
             if (!profile.reauth || profile.reauth < acceptable) {
-              return this.reauth();
+              // If UVPA is available and reauth key is stored
+              if (this.isUVPAA && this.reauthKeyAvailable()) {
+                // Try reauth
+                return this.reauth();
+              }
             }
           }
           return profile;
@@ -201,6 +206,27 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
+      async pReauth(form) {
+        try {
+          const url = `${PASSWORD}?reauth`;
+          const profile = await this._fetch(url, form);
+          this.setProfile(profile);
+
+          if (window.PasswordCredential) {
+            let email = form.get('email');
+            let password = form.get('password');
+            let cred = new PasswordCredential({
+              id: email,
+              password: password
+            });
+            navigator.credentials.store(cred);
+          }
+          return Promise.resolve(profile);
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      }
+
       async pSignUp(form) {
         try {
           const profile = await this._fetch(SIGNUP, form)
@@ -266,7 +292,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
       }
 
-      reauthAvailable() {
+      reauthKeyAvailable() {
         return !!localStorage.getItem('reauth');
       }
 

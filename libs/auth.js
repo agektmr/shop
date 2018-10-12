@@ -18,6 +18,7 @@ router.post('/session', (req, res) => {
 router.post('/password', upload.array(), async (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
+  const reauth = req.query.reauth !== undefined;
 
   if (!email || !password) {
     res.status(400).send('Bad Request');
@@ -33,9 +34,15 @@ router.post('/password', upload.array(), async (req, res) => {
     if (store.verify(password, profile['password']) === false)
       throw 'Wrong password';
 
+    // If reauth is requested, grant.
+    if (reauth) {
+      profile.reauth = (new Date()).getTime();
+    }
+
     // Make sure not to include the password in payload.
-    delete profile['password'];
-    delete profile['authenticators'];
+    delete profile.password;
+    delete profile.secondFactors;
+    delete profile.reauthKeys;
     req.session.profile = profile;
 
     res.json(profile);
@@ -81,8 +88,9 @@ router.post('/change-password', upload.array(), async (req, res) => {
     _profile.password = store.hash(new_password1);
     await store.save(_profile.id, _profile);
 
-    delete _profile['password'];
-    delete _profile['authenticators'];
+    delete _profile.password;
+    delete _profile.secondFactors;
+    delete _profile.reauthKeys;
     req.session.profile = _profile;
 
     res.json(_profile);
@@ -149,8 +157,9 @@ router.post('/register', upload.array(), async (req, res) => {
 
   try {
     await store.save(profile['id'], profile);
-    delete profile['password'];
-    delete profile['authenticators'];
+    delete profile.password;
+    delete profile.secondFactors;
+    delete profile.reauthKeys;
     req.session.profile = profile;
     res.json(profile);
   } catch (e) {
