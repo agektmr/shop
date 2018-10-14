@@ -84,7 +84,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin: 26px 0;
       }
 
-      .signing-button {
+      .signing-button > * {
+        margin: 16px 0;
         @apply(--layout-horizontal);
         @apply(--layout-around-justified);
       }
@@ -115,13 +116,13 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div class="main-frame">
       <iron-meta id="account" type="account"></iron-meta>
 
-      <div class="welcome">
+      <div class="welcome hidden" visible$="[[_computeIsSignUp(subroute)]]">
         <span>Thanks for shopping with us! Why don't you create an account and get 10% discount now?</span>
       </div>
 
-      <div class="thanks hidden" visible$="[[_computeSigningUp(subroute)]]">
+      <!-- <div class="thanks hidden" visible$="[[_computeSigningUp(subroute)]]">
         <span>Your order has been successfully placed.</span>
-      </div>
+      </div> -->
 
       <div class="signin-section">
         <form action="#" id="signinForm"
@@ -155,19 +156,19 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             </shop-input>
           </div>
 
-          <shop-button
-            class="signing-button hidden"
-            responsive
-            visible$="[[_computeIsSignUp]]">
-            <input type="button" on-click="_onSignUp" value="Sign Up">
-          </shop-button>
+          <div class="signing-button hidden" visible$="[[_computeIsSignUp(subroute)]]">
+            <shop-button responsive>
+              <input type="button" on-click="_onSignUp" value="Sign Up">
+            </shop-button>
+            <a href="/account/signin">Sign In instead.</a>
+          </div>
 
-          <shop-button
-            class="signing-button hidden"
-            responsive
-            visible$="[[_computeIsSignIn]]">
-            <input type="button" on-click="_onSignIn" value="Log In">
-          </shop-button>
+          <div class="signing-button hidden" visible$="[[_computeIsSignIn(subroute)]]">
+            <shop-button responsive>
+              <input type="button" on-click="_onSignIn" value="Log In">
+            </shop-button>
+            <a href="/account/signup">Don't have an account? Sign Up</a>
+          </div>
 
           <!-- <div class="google-signin" on-click="_onGSignIn">
             <img src="/images/google_signin.png">
@@ -251,14 +252,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         _isReauth: {
           computed: '_computeIsReauth(subroute.path)'
-        },
-
-        _computeIsSignUp: {
-          computed: '_computeCheckPath("signup")'
-        },
-
-        _computeIsSignIn: {
-          computed: '_computeCheckPath("signin")'
         }
 
       }}
@@ -286,21 +279,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         return path === '/reauth';
       }
 
-      _computeCheckPath(path) {
-        if (path == 'signin' &&
-           (this.subroute.path == '/signin' ||
-            this._isReauth)) {
-          return true;
-        } else if (path === 'signup' &&
-            this.subroute.path == '/signup') {
-          return true;
-        } else {
-          return false;
-        }
+      _computeIsSignIn(subroute) {
+        return subroute.path == '/signin' || this._isReauth;
       }
 
-      _computeSigningUp(subroute) {
-        return subroute.path === '/signup';
+      _computeIsSignUp(subroute) {
+        return subroute.path == '/signup';
       }
 
       _computeFocusOnPW(subroute, prefilledEmail) {
@@ -402,15 +386,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       _willSendRequest(e) {
         this._setWaiting(true);
-      }
-
-      _signout(evt) {
-        evt.preventDefault();
-
-        this._reset();
-        this.dispatchEvent(new CustomEvent('signout', {
-          bubbles: true, composed: true
-        }));
       }
 
       _visibleChanged(visible) {

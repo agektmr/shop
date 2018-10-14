@@ -311,9 +311,16 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <div class="left-bar-item"></div>
         <div class="logo" main-title><a href="/" aria-label="SHOP Home">SHOP</a></div>
         <div class="account-btn-container">
-          <a href="/settings" tabindex="-1">
+          <a href="/settings" tabindex="-1"
+            hidden$="[[!_computeSignedIn(profile)]]">
             <paper-icon-button
               src="[[profile.iconURL]]"
+              icon="[[_computeProfileIcon(profile)]]"
+              aria-label="Account"></paper-icon-button>
+          </a>
+          <a href="/account/signin" tabindex="-1"
+            hidden$="[[_computeSignedIn(profile)]]">
+            <paper-icon-button
               icon="[[_computeProfileIcon(profile)]]"
               aria-label="Account"></paper-icon-button>
           </a>
@@ -857,6 +864,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         } else {
           return 'account-circle';
         }
+      }
+
+      _computeSignedIn(profile) {
+        return profile && profile.id ? true : false;
       }
     }
 

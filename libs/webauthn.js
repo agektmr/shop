@@ -89,44 +89,6 @@ router.post('/makeCred', sessionCheck, async (req, res) => {
     return;
   }
 
-  /**
-   * Expected option items:
-   * {
-   *   timeout?,
-   *   attestationAttachment? = 'platform' | 'cross-platform',
-   *   requireResidentKey? = true | false,
-   *   userVerification? = 'required' | 'preferred' | 'discouraged',
-   *   attestation? = 'none' | 'indirect' | 'direct'
-   * }
-   **/
-  // const fido = new Fido2Lib({
-  //   timeout: req.body.timeout,
-  //   rpId: req.host,
-  //   rpName:'Polykart',
-  //   challengeSize: 32,
-  //   authenticator
-  // });
-  // const options = await fido.attestationOptions();
-  // console.log(options);
-  // return;
-  /**
-   * Response format:
-   * {
-   *   rp,
-   *   user,
-   *   challenge,
-   *   pubKeyCredParams,
-   *   timeout?,
-   *   excludeCredentials?,
-   *   authenticatorSelection? = {
-   *     attestationAttachment? = 'platform' | 'cross-platform',
-   *     requireResidentKey? = true | false,
-   *     userVerification? = 'required' | 'preferred' | 'discouraged'
-   *   },
-   *   attestation?,
-   *   extensions?
-   * }
-   **/
   const response = {};
   response.rp = {
     id: req.host,
@@ -156,15 +118,15 @@ router.post('/makeCred', sessionCheck, async (req, res) => {
   }
 
   const as = {}; // authenticatorSelection
-  const aa = req.body.attestationAttachment;
-  const rr = req.body.requireResidentKey;
-  const uv = req.body.userVerification;
+  const aa = req.body.authenticatorSelection.authenticatorAttachment;
+  const rr = req.body.authenticatorSelection.requireResidentKey;
+  const uv = req.body.authenticatorSelection.userVerification;
   const cp = req.body.attestation; // attestationConveyancePreference
   let asFlag = false;
 
   if (aa && (aa == 'platform' || aa == 'cross-platform')) {
     asFlag = true;
-    as.attestationAttachment = aa;
+    as.authenticatorAttachment = aa;
   }
   if (rr && typeof rr == boolean) {
     asFlag = true;

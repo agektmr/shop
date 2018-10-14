@@ -108,6 +108,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               if (this.isUVPAA && this.reauthKeyAvailable()) {
                 // Try reauth
                 return this.reauth();
+              } else {
+                profile = null;
               }
             }
           }
@@ -321,7 +323,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         const opts = {};
         if (!opts.authenticatorSelection) opts.authenticatorSelection = {};
-        opts.authenticatorSelection.authenticatorAttachement = 'platform';
+        opts.authenticatorSelection.authenticatorAttachment = 'platform';
         opts.authenticatorSelection.userVerification = 'required';
 
         try {

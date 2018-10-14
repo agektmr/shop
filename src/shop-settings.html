@@ -366,15 +366,20 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       async _onReauthChanged(e) {
-        let msg;
+        let msg = '';
         e.stopPropagation();
+        this._setWaiting(true);
         try {
           if (e.target.checked === true) {
             await this.accountData.registerReauthKey();
             msg = 'Fingerprint reauth enabled.';
           } else {
-            await this.accountData.removeReauthKey();
-            msg = 'Fingerprint reauth disabled.';
+            if (confirm('Do you want to disable reauth?')) {
+              await this.accountData.removeReauthKey();
+              msg = 'Fingerprint reauth disabled.';
+            } else {
+              e.target.checked = true;
+            }
           }
         } catch (err) {
           console.error(err);
@@ -382,6 +387,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           e.target.checked = !e.target.checked;
           msg = 'Changing reauth failed.';
         }
+        this._setWaiting(false);
+        if (msg == '') return;
         this.dispatchEvent(new CustomEvent('show-snackbar', {
           bubbles: true, composed: true, detail: { text: msg }
         }));
