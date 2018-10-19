@@ -32,20 +32,33 @@ app.use((req, res, next) => {
   next();
 });
 
+const sessionObject = {
+  cookie: {
+    maxAge: 31536000000, // 1 year
+    secure: true
+  },
+  secret: common.CLIENT_SECRET,
+  resave: true,
+  saveUninitialized: true
+};
+
 if (process.env.NODE_ENV === 'production') {
-  // app.use(express.static(path.join(__dirname, 'build/es6-bundled'), {
-  app.use(express.static(path.join(__dirname, ''), {
+  app.use(session(sessionObject));
+  // app.use(express.static(path.join(__dirname, 'build', 'es6-bundled'), {
+  app.use(express.static(__dirname, {
     setHeaders: res => {
       res.set('Strict-Tranport-Security', 'max-age=31536000');
     }
   }));
+  // }));
 } else {
+  // If localhost, turn off secure cookie
+  sessionObject.cookie.secure = false;
+  app.use(session(sessionObject));
+  // app.use(express.static(path.join(__dirname, 'build', 'es6-bundled')));
   app.use(express.static(__dirname));
 }
-app.use(session({
-  secret: common.CLIENT_SECRET,
-  secure: true
-}));
+
 app.set('views', './templates');
 
 app.use('/auth', auth);

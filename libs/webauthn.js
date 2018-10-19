@@ -11,17 +11,6 @@ function createBase64Random(len = 32) {
   return base64url(crypto.randomBytes(len));
 };
 
-function shortSessionCheck(req, res, next) {
-  const profile = req.session.profile;
-  const now = (new Date()).getTime();
-  const acceptable = now - REAUTH_DURATION;
-  if (profile.reauth && profile.reauth > acceptable) {
-    next();
-  } else {
-    res.status(401).send('Authentication Required');
-  }
-}
-
 function sessionCheck(req, res, next) {
   const profile = req.session.profile;
   if (profile) {
@@ -231,6 +220,7 @@ router.post('/regCred', sessionCheck, async (req, res) => {
 router.post('/getAsst', sessionCheck, async (req, res) => {
   const profile = req.session.profile;
   const reauth = req.query.reauth;
+  const userVerification = req.body.userVerification || 'preferred';
   let _profile;
   try {
     const store = new CredentialStore();
@@ -241,20 +231,16 @@ router.post('/getAsst', sessionCheck, async (req, res) => {
   }
 
   const response = {};
+  response.userVerification = userVerification;
   response.challenge = createBase64Random();
   req.session.challenge = response.challenge;
 
   if (reauth) {
-    for (let authr of _profile.reauthKeys) {
-      if (authr.credId == reauth) {
-        response.allowCredentials = [{
-          id: authr.credId,
-          type: 'public-key',
-          transports: authr.transports
-        }];
-        break;
-      }
-    }
+    response.allowCredentials = [{
+      id: reauth,
+      type: 'public-key',
+      transports: ['internal']
+    }];
   } else {
     response.allowCredentials = [];
     for (let authr of _profile.secondFactors) {

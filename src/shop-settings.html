@@ -35,6 +35,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         opacity: 0.1;
       }
 
+      h2 {
+        font-size: 1.3em;
+        font-weight: 500;
+      }
+
       shop-input, shop-select {
         font-size: 16px;
       }
@@ -73,7 +78,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin: 64px 8px 8px 8px;
       }
 
-      .welcome {
+      .settings {
+        text-align: center;
+        margin: 26px;
+      }
+
+      .reauth-suggestion {
         text-align: center;
         margin: 26px;
       }
@@ -93,18 +103,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         @apply(--layout-around-justified);
       }
 
-      .google-signin {
-        @apply(--layout-horizontal);
-        @apply(--layout-center-justified);
-        margin-top: 18px;
-        cursor: pointer;
-      }
-
-      .google-signin img {
-        width: 191px;
-        height: 46px;
-      }
-
       .new-key-section {
         font-weight: bold;
         text-align: right;
@@ -113,6 +111,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       .settings-box {
         margin: 64px 0;
+      }
+
+      .underline {
         border-bottom: 1px solid #ccc;
       }
 
@@ -127,6 +128,20 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       @media (max-width: 767px) {
+        .button-left {
+          left: 0 !important;
+          right: 50% !important;
+        }
+
+        .button-left > input {
+          background-color: var(--app-secondary-color);
+        }
+
+        .button-right {
+          left: 50% !important;
+          right: 0 !important;
+        }
+
         .login-form {
           width: 100%;
         }
@@ -136,10 +151,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div class="main-frame">
       <iron-meta id="account" type="account"></iron-meta>
 
-      <div class="welcome">
+      <div class="settings hidden" visible$="[[!_computeIsReauth(subroute)]]">
         <span>Welcome to Polymer Shop, {{profile.email}}!</span>
 
-        <div class="settings-box">
+        <div class="settings-box underline">
           <div class="settings-menu">
             <label for="email-settings">Change Email</label>
             <paper-icon-button
@@ -150,11 +165,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
           <div class="settings-menu">
             <label for="password-settings">Change Password</label>
-            <paper-icon-button
-              on-tap="_onChangePasswordLink"
-              icon="keyboard-arrow-right"
-              id="password-settings">
-            </paper-icon-button>
+            <a href="/change-password">
+              <paper-icon-button
+                icon="keyboard-arrow-right"
+                id="password-settings">
+              </paper-icon-button>
+            </a>
           </div>
 
           <div class="settings-menu hidden" visible$="{{_isUVPAA}}">
@@ -170,6 +186,22 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         <div class="logout-section">
           <shop-button responsive id="logoutButton">
             <input type="submit" on-click="_logout" value="Logout">
+          </shop-button>
+        </div>
+      </div>
+
+      <div class="reauth-suggestion hidden"
+           visible$="[[_computeIsReauth(subroute)]]">
+        <h2>Set up sign-in with your fingerprint</h2>
+        <div class="settings-box">
+          <span>Next time you have to prove your identity with polykart.store on the device, simply use your fingerprint or screenlock.</span>
+        </div>
+        <div class="button-box">
+          <shop-button responsive class="button-left">
+            <input type="button" on-click="_onNoThanks" value="No Thanks">
+          </shop-button>
+          <shop-button responsive class="button-right">
+            <input type="button" on-click="_onReauthEnabled" value="Yes, set up">
           </shop-button>
         </div>
       </div>
@@ -269,7 +301,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         // });
         this.accountData.checkSession(1)
         .catch(e => {
-          this.set('route.path', '/account/signin');
+          // Intentionally `localtion.href` instead of `_pushState`
+          // Because of query parameter
+          location.href = '/account/signin?next=/settings';
         });
       }
 
@@ -279,6 +313,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         } else {
           return false;
         }
+      }
+
+      _computeIsReauth(subroute) {
+        return subroute.path.indexOf('/suggest-reauth') > -1;
       }
 
       /**
@@ -312,11 +350,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           });
         }
         // this._reset();
-        this.dispatchEvent(new CustomEvent('settings', {
-          bubbles: true, composed: true, detail: {
-            title: 'Settings'
-          }
-        }));
+        this.dispatchEvent(new CustomEvent('change-section', {
+          bubbles: true, composed: true, detail: {title: 'Settings'}}));
       }
 
       async _addNewKey() {
@@ -394,8 +429,27 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }));
       }
 
-      _onChangePasswordLink() {
-        this._pushState('/change-password');
+      async _onReauthEnabled(e) {
+        let msg = '';
+        e.stopPropagation();
+        this._setWaiting(true);
+        try {
+          await this.accountData.registerReauthKey();
+          msg = 'Fingerprint reauth enabled.';
+        } catch (err) {
+          console.error(err);
+          msg = 'Changing reauth failed.';
+        }
+        this._setWaiting(false);
+        this.dispatchEvent(new CustomEvent('show-snackbar', {
+          bubbles: true, composed: true, detail: { text: msg }
+        }));
+        this._pushState('/');
+      }
+
+      _onNoThanks() {
+        this.accountData.declineReauthSuggestion();
+        this._pushState('/');
       }
     };
 

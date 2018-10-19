@@ -5,6 +5,18 @@ const multer = require('multer');
 const upload = multer();
 const CredentialStore = require('./credential-store');
 
+const REAUTH_DURATION = 1000 * 60 * 1; // 1 minute
+
+// TODO: Make this a middleware
+function respond(req, res, profile) {
+  delete profile.password;
+  delete profile.secondFactors;
+  delete profile.reauthKeys;
+  req.session.profile = profile;
+
+  res.json(profile);
+}
+
 router.post('/session', (req, res) => {
   // TODO: provide reauth status
   if (req.session.profile) {
@@ -18,7 +30,6 @@ router.post('/session', (req, res) => {
 router.post('/password', upload.array(), async (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
-  const reauth = req.query.reauth !== undefined;
 
   if (!email || !password) {
     res.status(400).send('Bad Request');
@@ -34,18 +45,9 @@ router.post('/password', upload.array(), async (req, res) => {
     if (store.verify(password, profile['password']) === false)
       throw 'Wrong password';
 
-    // If reauth is requested, grant.
-    if (reauth) {
-      profile.reauth = (new Date()).getTime();
-    }
+    profile.reauth = (new Date()).getTime();
 
-    // Make sure not to include the password in payload.
-    delete profile.password;
-    delete profile.secondFactors;
-    delete profile.reauthKeys;
-    req.session.profile = profile;
-
-    res.json(profile);
+    respond(req, res, profile);
   } catch (e) {
     console.error(e);
     res.status(401).send('Authentication failed.');
@@ -54,17 +56,19 @@ router.post('/password', upload.array(), async (req, res) => {
 });
 
 router.post('/change-password', upload.array(), async (req, res) => {
-  // TODO: Check strong authentication
-  if (!req.session.profile) {
+  // Reauth check
+  const now = (new Date()).getTime();
+  const acceptable = now - REAUTH_DURATION;
+  if (!req.session.profile ||
+      req.session.profile.reauth < acceptable) {
     res.status(401).send('Authentication required.');
-    return;
+    return
   }
-  const old_password = req.body['old-password'];
+
   const new_password1 = req.body['new-password1'];
   const new_password2 = req.body['new-password2'];
 
-  if (old_password == '' ||
-      new_password1 == '' ||
+  if (new_password1 == '' ||
       new_password2 == '') {
     res.status(400).send('Enter all values');
     return;
@@ -80,20 +84,13 @@ router.post('/change-password', upload.array(), async (req, res) => {
     if (!_profile)
       throw 'Matching profile not found.';
 
-    // Check old password matches
-    if (store.verify(old_password, _profile['password']) === false)
-      throw 'Wrong password';
-
     // Make sure not to include the password in payload.
     _profile.password = store.hash(new_password1);
     await store.save(_profile.id, _profile);
 
-    delete _profile.password;
-    delete _profile.secondFactors;
-    delete _profile.reauthKeys;
-    req.session.profile = _profile;
+    _profile.reauth = (new Date()).getTime();
 
-    res.json(_profile);
+    respond(req, res, _profile);
   } catch (e) {
     console.error(e);
     res.status(401).send('Authentication failed.');
@@ -157,11 +154,10 @@ router.post('/register', upload.array(), async (req, res) => {
 
   try {
     await store.save(profile['id'], profile);
-    delete profile.password;
-    delete profile.secondFactors;
-    delete profile.reauthKeys;
-    req.session.profile = profile;
-    res.json(profile);
+
+    profile.reauth = (new Date()).getTime()
+
+    respond(req, res, profile);
   } catch (e) {
     res.status(400).send('Storing credential failed.');
   }
@@ -178,7 +174,7 @@ router.post('/unregister', upload.array(), async (req, res) => {
   const store = new CredentialStore();
   try {
     await store.remove(id);
-    req.session.profile = null;
+    delete req.session.profile;
     res.send('Success');
   } catch (e) {
     console.error(e);

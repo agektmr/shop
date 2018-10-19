@@ -635,8 +635,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         if (this._validateForm(form)) {
           if (this.gPayAvailable) {
             this._pushState('google-pay');
+            this.dispatchEvent(new CustomEvent('change-section', {
+              bubbles: true, composed: true, detail: {title: 'Google Pay'}}));
           } else {
             this._pushState('credit-card');
+            this.dispatchEvent(new CustomEvent('change-section', {
+              bubbles: true, composed: true, detail: {title: 'Credit Card'}}));
           }
         }
       }

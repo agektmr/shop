@@ -29,7 +29,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     const WEBAUTHN_AUTHASST = '/webauthn/authAsst';
     const WEBAUTHN_REMOVE = '/webauthn/remove';
     const WEBAUTHN_KEYS = '/webauthn/keys';
-    const REAUTH_DURATION = 1000 * 60 * 5; // 5 minutes
+    const REAUTH_DURATION = 1000 * 60 * 1; // 1 minute
+    const LS_REAUTH_KEY = 'reauth';
+    const LS_REAUTH_SUGGESTION = 'declined-reauth-suggestion';
 
     class ShopAccountData extends Polymer.Element {
 
@@ -74,7 +76,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             }));
           });
         } else {
-          return this.isUVPAA = false;
+          this.isUVPAA = false;
           this.dispatchEvent(new CustomEvent('account-data-ready', {
             bubbles: true, composed: true
           }));
@@ -109,6 +111,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
                 // Try reauth
                 return this.reauth();
               } else {
+                // TODO: Shouldn't this simply throw an exception?
                 profile = null;
               }
             }
@@ -208,27 +211,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
-      async pReauth(form) {
-        try {
-          const url = `${PASSWORD}?reauth`;
-          const profile = await this._fetch(url, form);
-          this.setProfile(profile);
-
-          if (window.PasswordCredential) {
-            let email = form.get('email');
-            let password = form.get('password');
-            let cred = new PasswordCredential({
-              id: email,
-              password: password
-            });
-            navigator.credentials.store(cred);
-          }
-          return Promise.resolve(profile);
-        } catch (e) {
-          return Promise.reject(e);
-        }
-      }
-
       async pSignUp(form) {
         try {
           const profile = await this._fetch(SIGNUP, form)
@@ -295,21 +277,29 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       }
 
       reauthKeyAvailable() {
-        return !!localStorage.getItem('reauth');
+        return !!localStorage.getItem(LS_REAUTH_KEY);
       }
 
       _getReauthData() {
-        return localStorage.getItem('reauth');
+        return localStorage.getItem(LS_REAUTH_KEY);
       }
 
       _setReauthData(credId) {
-        localStorage.setItem('reauth', credId);
+        localStorage.setItem(LS_REAUTH_KEY, credId);
       }
 
       _removeReauthData() {
-        const credId = localStorage.getItem('reauth');
-        localStorage.removeItem('reauth');
+        const credId = localStorage.getItem(LS_REAUTH_KEY);
+        localStorage.removeItem(LS_REAUTH_KEY);
         return credId;
+      }
+
+      declineReauthSuggestion() {
+        localStorage.setItem(LS_REAUTH_SUGGESTION, 'true');
+      }
+
+      didDeclineReauthSuggestion() {
+        return !!localStorage.getItem(LS_REAUTH_SUGGESTION);
       }
 
       async registerReauthKey() {
@@ -318,7 +308,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
         // If reauth key is already registered, throw an exception
         if (this._getReauthData() !== null) {
-          return Promise.reject('Reauth key alrady registered.');
+          return Promise.reject('Reauth key already registered.');
         }
 
         const opts = {};
@@ -326,37 +316,28 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         opts.authenticatorSelection.authenticatorAttachment = 'platform';
         opts.authenticatorSelection.userVerification = 'required';
 
-        try {
-          const options = await this._fetch(`${WEBAUTHN_MAKECRED}?reauth`, opts);
-console.log('Response from makeCred', options);
+        const options = await this._fetch(`${WEBAUTHN_MAKECRED}?reauth`, opts);
 
-          options.user.id = base64url.decode(options.user.id);
-          options.challenge = base64url.decode(options.challenge);
+        options.user.id = base64url.decode(options.user.id);
+        options.challenge = base64url.decode(options.challenge);
 
-          if (options.excludeCredentials) {
-            for (let cred of options.excludeCredentials) {
-              cred.id = base64url.decode(cred.id);
-            }
+        if (options.excludeCredentials) {
+          for (let cred of options.excludeCredentials) {
+            cred.id = base64url.decode(cred.id);
           }
-
-console.log('PublicKeyCredentialCreationOptions', options);
-
-          const cred = await navigator.credentials.create({
-            publicKey: options
-          });
-console.log('Response of `navigator.credentials.get()`', cred);
-
-          const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
-
-          const profile = await this._fetch('webauthn/regCred?reauth', parsedCred);
-
-          this._setReauthData(parsedCred.id);
-
-          return Promise.resolve();
-        } catch (e) {
-          console.error(e);
-          return Promise.reject(e);
         }
+
+        const cred = await navigator.credentials.create({
+          publicKey: options
+        });
+
+        const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
+
+        const profile = await this._fetch('webauthn/regCred?reauth', parsedCred);
+
+        this._setReauthData(parsedCred.id);
+
+        return parsedCred.id;
       }
 
       async removeReauthKey() {
@@ -371,31 +352,24 @@ console.log('Response of `navigator.credentials.get()`', cred);
         }
 
         const credId = this._getReauthData();
-        try {
-          const url =`${WEBAUTHN_GETASST}?reauth=${encodeURIComponent(credId)}`;
-          const options = await this._fetch(url);
+        const url =`${WEBAUTHN_GETASST}?reauth=${encodeURIComponent(credId)}`;
+        const options = await this._fetch(url);
 
-  console.log('Response from getAsst', options);
+        options.challenge = base64url.decode(options.challenge);
 
-          options.challenge = base64url.decode(options.challenge);
-
-          if (options.allowCredentials) {
-            for (let cred of options.allowCredentials) {
-              cred.id = base64url.decode(cred.id);
-            }
+        if (options.allowCredentials) {
+          for (let cred of options.allowCredentials) {
+            cred.id = base64url.decode(cred.id);
           }
-
-          const cred = await navigator.credentials.get({
-            publicKey: options
-          });
-
-          const parsedCred = await this._encodeAuthenticatorAssertionResponse(cred);
-
-          return await this._fetch(`${WEBAUTHN_AUTHASST}?reauth`, parsedCred);
-        } catch (e) {
-          console.error(e);
-          throw 'Reauth failed!';
         }
+
+        const cred = await navigator.credentials.get({
+          publicKey: options
+        });
+
+        const parsedCred = await this._encodeAuthenticatorAssertionResponse(cred);
+
+        return await this._fetch(`${WEBAUTHN_AUTHASST}?reauth`, parsedCred);
       }
 
       async getKeys() {
@@ -466,8 +440,6 @@ console.log('Response of `navigator.credentials.get()`', cred);
         try {
           const options = await this._fetch(`${WEBAUTHN_MAKECRED}`, opts);
 
-console.log('Response from makeCred', options);
-
           options.user.id = base64url.decode(options.user.id);
           options.challenge = base64url.decode(options.challenge);
 
@@ -477,13 +449,9 @@ console.log('Response from makeCred', options);
             }
           }
 
-console.log('PublicKeyCredentialCreationOptions', options);
-
           const cred = await navigator.credentials.create({
             publicKey: options
           });
-
-console.log('Response of `navigator.credentials.get()`', cred);
 
           const parsedCred = await this._encodeAuthenticatorAttestationResponse(cred);
 
@@ -498,8 +466,6 @@ console.log('Response of `navigator.credentials.get()`', cred);
       async assertCredential() {
         try {
           const options = await this._fetch(`${WEBAUTHN_GETASST}`);
-
-console.log('Response from getAsst', options);
 
           options.challenge = base64url.decode(options.challenge);
 

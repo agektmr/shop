@@ -33,6 +33,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         opacity: 0.1;
       }
 
+      h2 {
+        font-size: 1.3em;
+        font-weight: 500;
+      }
+
       shop-input, shop-select {
         font-size: 16px;
       }
@@ -116,13 +121,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     <div class="main-frame">
       <iron-meta id="account" type="account"></iron-meta>
 
+      <div class="thanks hidden" visible$="[[_computeIsAfterShopping(subroute, prefilledEmail)]]">
+        <span>Your order has been successfully placed.</span>
+      </div>
+
       <div class="welcome hidden" visible$="[[_computeIsSignUp(subroute)]]">
+        <h2>Sign Up</h2>
         <span>Thanks for shopping with us! Why don't you create an account and get 10% discount now?</span>
       </div>
 
-      <!-- <div class="thanks hidden" visible$="[[_computeSigningUp(subroute)]]">
-        <span>Your order has been successfully placed.</span>
-      </div> -->
+      <div class="welcome hidden" visible$="[[_computeIsSignIn(subroute)]]">
+        <h2>Sign In</h2>
+      </div>
 
       <div class="signin-section">
         <form action="#" id="signinForm"
@@ -135,7 +145,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               <input type="email" id="accountEmail" name="email"
                   placeholder="Email" required
                   aria-labelledby="accountEmailLabel"
-                  autocomplete="username" value$="[[prefilledEmail]]">
+                  autocomplete="username"
+                  disabled$="[[_isReauth]]"
+                  value$="[[prefilledEmail]]">
               <shop-md-decorator error-message="Invalid Email" aria-hidden="true">
                 <label id="accountEmailLabel">Email</label>
                 <shop-underline></shop-underline>
@@ -213,11 +225,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           value: 'init'
         },
 
-        keys: {
-          type: Array,
-          value: []
-        },
-
         /**
          * Object containing profile data.
          */
@@ -251,7 +258,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         },
 
         _isReauth: {
-          computed: '_computeIsReauth(subroute.path)'
+          computed: '_computeIsReauth(subroute)'
         }
 
       }}
@@ -260,9 +267,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.accountData = this.$.account.byKey('account');
         this.accountData.checkSession()
         .then(profile => {
+          if (profile) {
+            this.prefilledEmail = profile.email;
+          }
           if (!this._isReauth && profile) {
             // TODO: Continue to next page
-            this._pushState('/settings');
+            location.href = '/settings';
           }
         }).catch(e => {});
       }
@@ -275,43 +285,57 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }
       }
 
-      _computeIsReauth(path) {
-        return path === '/reauth';
+      _computeIsReauth(subroute) {
+        return subroute.path.indexOf('/reauth') > -1;
       }
 
       _computeIsSignIn(subroute) {
-        return subroute.path == '/signin' || this._isReauth;
+        return subroute.path.indexOf('/signin') > -1 || this._isReauth;
       }
 
       _computeIsSignUp(subroute) {
-        return subroute.path == '/signup';
+        return subroute.path.indexOf('/signup') > -1;
+      }
+
+      _computeIsAfterShopping(subroute, email) {
+        if (this._computeIsSignUp(subroute) && email) {
+          return true;
+        } else {
+          return false;
+        }
       }
 
       _computeFocusOnPW(subroute, prefilledEmail) {
-        return subroute.path === '/signup' && prefilledEmail.length > 0;
+        return this._computeIsSignUp(subroute) && prefilledEmail.length > 0;
       }
 
-      _onGSignIn() {
-        this._setWaiting(true);
-        this.accountData.gSignIn()
-        .then(() => {
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'You are signed in!'
-            }
-          }));
-          this._setWaiting(false);
-          this._pushState('/');
-        }, err => {
-          console.error(err);
-          this._setWaiting(false);
-          this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'Sign-In failed'
-            }
-          }));
-        });
-      }
+      // _onGSignIn() {
+      //   this._setWaiting(true);
+      //   this.accountData.gSignIn()
+      //   .then(() => {
+      //     this.dispatchEvent(new CustomEvent('show-snackbar', {
+      //       bubbles: true, composed: true, detail: {
+      //         text: 'You are signed in!'
+      //       }
+      //     }));
+      //     this._setWaiting(false);
+      //     if (this.queryParams.next) {
+      //       const next = this.queryParams.next;
+      //       this.queryParams = {};
+      //       location.href = next;
+      //     } else {
+      //       this._pushState('/');
+      //     }
+      //   }, err => {
+      //     console.error(err);
+      //     this._setWaiting(false);
+      //     this.dispatchEvent(new CustomEvent('show-snackbar', {
+      //       bubbles: true, composed: true, detail: {
+      //         text: 'Sign-In failed'
+      //       }
+      //     }));
+      //   });
+      // }
 
       _onSignUp(evt) {
         evt.preventDefault();
@@ -330,8 +354,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             }
           }));
           this._reset();
-          this._setWaiting(false);
-          this._pushState('/');
+          this._forwardUser();
         }).catch(err => {
           this._setWaiting(false);
           this.dispatchEvent(new CustomEvent('show-snackbar', {
@@ -351,28 +374,26 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         var form = new FormData(this.$.signinForm);
 
-        let promise;
-        if (this._isReauth) {
-          promise = this.accountData.pReauth(form);
-        } else {
-          promise = this.accountData.pSignIn(form)
+        // Workaround for disabled element not passing a form field
+        if (this.$.accountEmail.disabled) {
+          form.set('email', this.$.accountEmail.value);
         }
-        promise.then(profile => {
+
+        this.accountData.pSignIn(form).then(profile => {
           this.dispatchEvent(new CustomEvent('show-snackbar', {
             bubbles: true, composed: true, detail: {
               text: 'You are signed in!'
             }
           }));
           this._reset();
-          this._setWaiting(false);
-          this._pushState('/');
+          this._forwardUser();
         }).catch(err => {
+          this._setWaiting(false);
           this.dispatchEvent(new CustomEvent('show-snackbar', {
             bubbles: true, composed: true, detail: {
               text: 'Sign-In failed'
             }
           }));
-          this._setWaiting(false);
         });
       }
 
@@ -409,50 +430,22 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }));
       }
 
-      async _addNewKey() {
-        let msg = '';
-        const options = {};
-        try {
-          const cred = await this.accountData.registerCredential(options);
-          this.keys = await this.accountData.getKeys();
-          msg = 'Second factor added.';
-        } catch (e) {
-          console.error(e);
-          msg = e;
+      _forwardUser() {
+        if (this.queryParams.next) {
+          const next = this.queryParams.next;
+          this.queryParams = {};
+          location.href = next;
+          return;
         }
-        this.dispatchEvent(new CustomEvent('show-snackbar', {
-          bubbles: true, composed: true, detail: { text: msg }
-        }));
-      }
-
-      async _tryAKey() {
-        let msg = '';
-        try {
-          const cred = await this.accountData.assertCredential();
-          msg = 'Successfully signed in.';
-        } catch (e) {
-          console.error(e);
-          msg = e;
+        if (!this.accountData.didDeclineReauthSuggestion() &&
+            !this.accountData.reauthKeyAvailable() &&
+            this.accountData.isUVPAA) {
+        // if (!this.accountData.didDeclineReauthSuggestion() &&
+        //     !this.accountData.reauthKeyAvailable()) {
+          this._pushState('/settings/suggest-reauth')
+        } else {
+          this._pushState('/');
         }
-        this.dispatchEvent(new CustomEvent('show-snackbar', {
-          bubbles: true, composed: true, detail: { text: msg }
-        }));
-      }
-
-      async _onRemoveCred(e) {
-        let msg = '';
-        const credId = e.detail.credId;
-        try {
-          await this.accountData.removeCredential(credId);
-          this.keys = await this.accountData.getKeys();
-          msg = 'Removed the credential.';
-        } catch (e) {
-          console.error(e);
-          msg = e;
-        }
-        this.dispatchEvent(new CustomEvent('show-snackbar', {
-          bubbles: true, composed: true, detail: { text: msg }
-        }));
       }
 
       /**
