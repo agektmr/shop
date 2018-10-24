@@ -14,11 +14,12 @@
 
 const express = require('express');
 const hbs = require('hbs');
-const path = require('path');
 const session = require('express-session');
 const auth = require('./libs/auth');
 const webauthn = require('./libs/webauthn');
 const common = require('./libs/common');
+const Datastore = require('@google-cloud/datastore');
+const DatastoreStore = require('@google-cloud/connect-datastore')(session);
 
 const app = express();
 app.enable('trust proxy');
@@ -43,6 +44,12 @@ const sessionObject = {
 };
 
 if (process.env.NODE_ENV === 'production') {
+  sessionObject.store = new DatastoreStore({
+    dataset: Datastore({
+      prefix: 'express-sessions',
+      projectId: common.PROJECT_ID
+    })
+  });
   app.use(session(sessionObject));
   // app.use(express.static(path.join(__dirname, 'build', 'es6-bundled'), {
   app.use(express.static(__dirname, {
@@ -52,6 +59,13 @@ if (process.env.NODE_ENV === 'production') {
   }));
   // }));
 } else {
+  sessionObject.store = new DatastoreStore({
+    dataset: Datastore({
+      prefix: 'express-sessions',
+      projectId: common.PROJECT_ID,
+      apiEndpoint: 'http://localhost:8081'
+    })
+  });
   // If localhost, turn off secure cookie
   sessionObject.cookie.secure = false;
   app.use(session(sessionObject));

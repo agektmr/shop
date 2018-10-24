@@ -390,9 +390,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         }).catch(err => {
           this._setWaiting(false);
           this.dispatchEvent(new CustomEvent('show-snackbar', {
-            bubbles: true, composed: true, detail: {
-              text: 'Sign-In failed'
-            }
+            bubbles: true, composed: true, detail: { text: 'Sign-In failed' }
           }));
         });
       }
@@ -400,7 +398,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       /**
        * Sets the valid state and updates the location.
        */
-      _pushState(state) {
+      _pushState(state, redirect) {
         this._validState = state;
         this.set('route.path', state);
       }
@@ -424,9 +422,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
         this._reset();
         this.dispatchEvent(new CustomEvent('change-section', {
-          bubbles: true, composed: true, detail: {
-            title: 'Account'
-          }
+          bubbles: true, composed: true, detail: { title: 'Account' }
         }));
       }
 

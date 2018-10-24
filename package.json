@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/agektmr/shop#readme",
   "dependencies": {
+    "@google-cloud/connect-datastore": "^1.0.0",
     "@google-cloud/datastore": "^1.4.1",
     "base64url": "^3.0.0",
     "bcrypt": "^3.0.1",
