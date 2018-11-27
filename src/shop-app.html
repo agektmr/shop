@@ -78,7 +78,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         pointer-events: auto;
       }
 
-      .left-bar-item {
+      .nav-bar-item {
         width: 40px;
       }
 
@@ -88,7 +88,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
       .cart-btn-container {
         position: relative;
-        width: 40px;
       }
 
       .announcer {
@@ -299,7 +298,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 
     <app-header role="navigation" id="header" effects="waterfall" condenses reveals>
       <app-toolbar>
-        <div class="left-bar-item">
+        <div class="nav-bar-item">
           <paper-icon-button
               class="menu-btn"
               icon="menu"
@@ -310,9 +309,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <paper-icon-button icon="arrow-back" aria-label="Go back"></paper-icon-button>
           </a>
         </div>
-        <div class="left-bar-item"></div>
+        <div class="nav-bar-item"></div>
         <div class="logo" main-title><a href="/" aria-label="SHOP Home">SHOP</a></div>
-        <div class="account-btn-container">
+        <div class="nav-bar-item account-btn-container">
           <a href="/settings" tabindex="-1"
             hidden$="[[!_computeSignedIn(profile)]]">
             <paper-icon-button
@@ -327,7 +326,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               aria-label="Account"></paper-icon-button>
           </a>
         </div>
-        <div class="cart-btn-container">
+        <div class="nav-bar-item cart-btn-container">
           <a href="/cart" tabindex="-1">
             <paper-icon-button icon="shopping-cart" aria-label$="Shopping cart: [[_computePluralizedQuantity(numItems)]]"></paper-icon-button>
           </a>
