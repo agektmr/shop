@@ -49,7 +49,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           type: Boolean,
           // Temporary set `true` to avoid consequent `canMakePayment` call
           // causing cache to fail evaluating calls after second.
-          value: true,
+          value: false,
           notify: true
         },
 
@@ -64,6 +64,18 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         },
 
         canMakeGPay: {
+          type: Boolean,
+          value: false,
+          notify: true
+        },
+
+        canMakeBobPay: {
+          type: Boolean,
+          value: false,
+          notify: true
+        },
+
+        canMakeApplePay: {
           type: Boolean,
           value: false,
           notify: true
@@ -104,37 +116,67 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           label: 'Total',
           amount: { value: '0', currency: this.currency }
         }};
-        this.request = new PaymentRequest(this.paymentMethods, this.details);
-        // // Temporarily skip to avoid calling `canMakePayment` twice
-        // this.request.canMakePayment().then(status => {
-        //   this.canMakePaymentRequest = status;
-        // });
 
-        this.gPayData = this._computeGPayData();
-        this.gPayClient = new google.payments.api.PaymentsClient({
-          environment: this.gPayData.environment || 'TEST'
-        });
-        this.gPayClient.isReadyToPay({
-          allowedPaymentMethods: this.gPayData.allowedPaymentMethods
-        }).then(status => {
-          this.canMakeGPay = status.result;
-          this.gPayClient.prefetchPaymentData(this.gPayData);
-        });
+        let request;
+        for (let method of this.paymentMethods) {
+          switch (method.supportedMethods) {
+            case 'https://google.com/pay':
+              this.gPayData = this._computeGPayData();
+              this.gPayClient = new google.payments.api.PaymentsClient({
+                environment: this.gPayData.environment || 'TEST'
+              });
+              this.gPayClient.isReadyToPay({
+                allowedPaymentMethods: this.gPayData.allowedPaymentMethods
+              }).then(status => {
+                this.canMakeGPay = status.result;
+                this.gPayClient.prefetchPaymentData(this.gPayData);
+              });
+              break;
+            case 'https://apple.com/apple-pay':
+              request = new PaymentRequest([method], this.details);
+              request.canMakePayment().then(status => {
+                this.canMakeApplePay = status;
+              });
+              break;
+            case 'https://bobpay.xyz/pay':
+              request = new PaymentRequest([method], this.details);
+              request.canMakePayment().then(status => {
+                this.canMakeBobpay = status;
+              });
+              break;
+            case 'basic-card':
+              request = new PaymentRequest([method], this.details);
+              request.canMakePayment().then(status => {
+                this.canMakePaymentRequest = status;
+              });
+              break;
+          }
+        }
       }
 
-      show(displayItems) {
+      pay(methodName, displayItems) {
+        if (methodName === 'https://google.com/pay') {
+          return this.payWithGoogle(displayItems);
+        }
+        let method;
+        for (let _method of this.paymentMethods) {
+          if (_method.supportedMethods === methodName) {
+            method = [_method]; 
+          }
+        }
+        if (!method) throw 'Method not found';
         this.details = {
           total: this._getToalFromDisplayItems(displayItems),
           displayItems: displayItems
         };
         this.options = {
-          requestShipping:    true,
+          requestShipping:    false,
           requestPayerEmail:  this.requestPayerEmail,
           requestPayerPhone:  this.requestPayerPhone,
           requestPayerName:   this.requestPayerName,
           shippingType:       this.shippingType
         };
-        this.request = new PaymentRequest(this.paymentMethods, this.details, this.options);
+        this.request = new PaymentRequest(method, this.details, this.options);
         this.request.addEventListener('shippingoptionchange', e => {
           e.updateWith(new Promise(resolve => {
             this._updateShippingOptions(
@@ -149,6 +191,34 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         });
         return this.request.show()
       }
+
+      // show(displayItems) {
+      //   this.details = {
+      //     total: this._getToalFromDisplayItems(displayItems),
+      //     displayItems: displayItems
+      //   };
+      //   this.options = {
+      //     requestShipping:    true,
+      //     requestPayerEmail:  this.requestPayerEmail,
+      //     requestPayerPhone:  this.requestPayerPhone,
+      //     requestPayerName:   this.requestPayerName,
+      //     shippingType:       this.shippingType
+      //   };
+      //   this.request = new PaymentRequest(this.paymentMethods, this.details, this.options);
+      //   this.request.addEventListener('shippingoptionchange', e => {
+      //     e.updateWith(new Promise(resolve => {
+      //       this._updateShippingOptions(
+      //         this.details, this.request.shippingOption, resolve);
+      //     }));
+      //   });
+      //   this.request.addEventListener('shippingaddresschange', e => {
+      //     e.updateWith(new Promise(resolve => {
+      //       this._updateShippingAddress(
+      //         this.details, this.request.shippingAddress, resolve);
+      //     }));
+      //   });
+      //   return this.request.show()
+      // }
 
       payWithGoogle(displayItems) {
         let total = this._getToalFromDisplayItems(displayItems);

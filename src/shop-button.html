@@ -13,11 +13,10 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
 <dom-module id="shop-button">
   <template>
     <style>
-
       shop-button {
         display: inline-block;
+        user-select: none;
       }
-
       shop-button > * {
         display: inline-block;
         box-sizing: border-box;
@@ -35,25 +34,43 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         outline: none;
         -webkit-appearance: none;
       }
-
       shop-button > *:focus {
         background-color: #c5cad3;
       }
-
       shop-button > *:active {
         background-color: #000;
         color: #FFF;
       }
+      shop-button > .googlepay:active {
+        background-color: #c5cad3;
+        color: transparent;
+      }
+      .googlepay {
+        background-image: url('https://www.gstatic.com/instantbuy/svg/dark_long_gpay.svg');
+        background-color: #000;
+        background-origin: content-box;
+        background-position: center;
+        background-repeat: no-repeat;
+        color: transparent;
+        outline: 0;
+      }
+      .bobpay-button {
 
+      }
+      .creditcard-button {
+
+      }
       @media (max-width: 767px) {
-
+        shop-button > *:active {
+          background-color: #000;
+          color: transparent;
+        }
         /* Responsive buttons are used in shop-detail, shop-cart and shop-checkout */
         shop-button[responsive] {
           @apply --layout-fixed-bottom;
           height: 64px;
           z-index: 1;
         }
-
         shop-button[responsive] > * {
           background-color: var(--app-accent-color);
           border: none;
@@ -63,13 +80,22 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           height: 100%;
           font-size: 15px;
         }
-
         shop-button[responsive] > *:focus {
           background-color: var(--app-accent-color);
         }
-
+        shop-button > button.googlepay {
+          color: transparent;
+        }
+        .googlepay {
+          background-image: url('https://www.gstatic.com/instantbuy/svg/dark_long_gpay.svg');
+          background-color: #000 !important;
+          background-origin: content-box;
+          background-position: center;
+          background-repeat: no-repeat;
+          color: transparent;
+          outline: 0;
+        }
       }
-
     </style>
   </template>
 </dom-module>
