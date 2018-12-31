@@ -75,6 +75,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           notify: true
         },
 
+        canMakeSepa: {
+          type: Boolean,
+          value: false,
+          notify: true
+        },
+
         canMakeApplePay: {
           type: Boolean,
           value: false,
@@ -144,6 +150,12 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
                 this.canMakeBobpay = status;
               });
               break;
+            case 'https://pay.mope.ml':
+              request = new PaymentRequest([method], this.details);
+              request.canMakePayment().then(status => {
+                this.canMakeSepa = status;
+              });
+              break;
             case 'basic-card':
               request = new PaymentRequest([method], this.details);
               request.canMakePayment().then(status => {
@@ -161,7 +173,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         let method;
         for (let _method of this.paymentMethods) {
           if (_method.supportedMethods === methodName) {
-            method = [_method]; 
+            method = [_method];
           }
         }
         if (!method) throw 'Method not found';
@@ -189,6 +201,22 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               this.details, this.request.shippingAddress, resolve);
           }));
         });
+        this.request.addEventListener('merchantvalidation', e => {
+          const headers = new Headers({
+            'Content-Type': 'application/json'
+          });
+          const promise = fetch('/applepay/validate/', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({validationURL: e.validationURL})
+          }).then(res => {
+            if (res.status === 200) {
+              return res.json();
+            }
+          });
+          e.complete(promise);
+        });
+
         return this.request.show()
       }
 

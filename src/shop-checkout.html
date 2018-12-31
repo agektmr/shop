@@ -40,6 +40,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         margin-bottom: 20px;
       }
 
+      shop-button {
+        display: block;
+        margin-bottom: 10px;
+      }
+
       paper-spinner-lite {
         position: fixed;
         top: calc(50% - 14px);
@@ -450,38 +455,36 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               <div class="flex">Total</div>
               <div>[[_formatPrice(total)]]</div>
             </div>
-            <div class="proceed-box">
-              <shop-button responsive class="proceed-box">
-                <button
-                  class="creditcard-button"
-                  on-tap="_proceedToCreditCard"
-                  title="Pay with A Credit Card">Pay with A Credit Card</button>
-              </shop-button>
-            </div>
-            <div class="proceed-box" hidden$="[[!gPayAvailable]]">
-              <shop-button responsive class="proceed-box">
-                <button
-                  class="googlepay"
-                  on-tap="_googlePaySubmit"
-                  title="Pay with Google Pay">Pay with Google Pay</button>
-              </shop-button>
-            </div>
-            <div class="proceed-box" hidden$="[[!bobpayAvailable]]">
-              <shop-button responsive class="proceed-box">
-                <button
-                  class="bobpay-button"
-                  on-tap="_payWithBobPay"
-                  title="Pay with BobPay">Pay with BobPay</button>
-              </shop-button>
-            </div>
-            <div class="proceed-box" hidden$="[[!applePayAvailable]]">
-              <shop-button responsive class="proceed-box">
-                <button
-                  class="apple-pay-button"
-                  on-tap="_payWithApplePay"
-                  title="Pay with Apple Pay">Pay with Apple Pay</button>
-              </shop-button>
-            </div>
+            <shop-button responsive class="inline">
+              <button
+                class="creditcard-button"
+                on-tap="_proceedToCreditCard"
+                title="Pay with A Credit Card">Pay with A Credit Card</button>
+            </shop-button>
+            <shop-button responsive class="inline" hidden$="[[!gPayAvailable]]">
+              <button
+                class="googlepay"
+                on-tap="_googlePaySubmit"
+                title="Pay with Google Pay">Pay with Google Pay</button>
+            </shop-button>
+            <shop-button responsive class="inline" hidden$="[[!bobpayAvailable]]">
+              <button
+                class="bobpay-button"
+                on-tap="_payWithBobPay"
+                title="Pay with BobPay">Pay with BobPay</button>
+            </shop-button>
+            <shop-button responsive class="inline" hidden$="[[!sepaAvailable]]">
+              <button
+                class="sepa-button"
+                on-tap="_payWithSepa"
+                title="Pay with SEPA">Pay with SEPA</button>
+            </shop-button>
+            <shop-button responsive class="inline" hidden$="[[!applePayAvailable]]">
+              <button
+                class="apple-pay-button"
+                on-tap="_payWithApplePay"
+                title="Pay with Apple Pay">Pay with Apple Pay</button>
+            </shop-button>
           </section>
         </div>
 
@@ -564,6 +567,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         gPayAvailable: Boolean,
 
         bobPayAvailable: Boolean,
+
+        sepaAvailable: Boolean,
 
         applePayAvailable: Boolean,
 
@@ -712,6 +717,14 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.dispatchEvent(new CustomEvent('pay', {
           bubbles: true, composed: true, detail: {
             method: 'https://bobpay.xyz/pay'
+          }
+        }));
+      }
+
+      _payWithSepa(e) {
+        this.dispatchEvent(new CustomEvent('pay', {
+          bubbles: true, composed: true, detail: {
+            method: 'https://pay.mope.ml'
           }
         }));
       }

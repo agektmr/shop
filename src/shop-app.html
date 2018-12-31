@@ -277,6 +277,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         can-make-payment-request="{{prAvailable}}"
         can-make-bobpay="{{bobpayAvailable}}"
         can-make-apple-pay="{{applePayAvailable}}"
+        can-make-sepa="{{sepaAvailable}}"
         currency="USD">
       <shop-payment-method
         supported-methods="basic-card"
@@ -288,6 +289,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
       <shop-payment-method
         supported-methods="https://bobpay.xyz/pay"
         ></shop-payment-method>
+      <shop-payment-method
+        supported-methods="https://pay.mope.ml"
+        data='{"supportedNetworks":["SEPA"],"payeeAccountNumber":"CH2004835074622251000","payeeName":"Polymer Shop","payeeBankCode":"CRESCHZZXX","payeePaymentIdentificationHumanReadable": "Polymer Outware Purchase","payeePaymentIdentifierMachineReadable":"polyref1"}'></shop-payment-method>
       <shop-payment-method
         supported-methods="https://google.com/pay"
         data='{"merchantId":"02510116604241796260","apiVersion":1,"environment":"TEST","allowedPaymentMethods":["CARD","TOKENIZED_CARD"],"paymentMethodTokenizationParameters": { "tokenizationType":"PAYMENT_GATEWAY", "parameters": {"gateway":"stripe","stripe:publishableKey":"pk_test_fkdoiK6FR5BLZMFNbSGoDjpn","stripe:version":"5.1.0"}},"cardRequirements":{ "allowedCardNetworks":["AMEX","DISCOVER","MASTERCARD","VISA"], "billingAddressRequired":false}, "phoneNumberRequired":false,"emailRequired":false, "shippingAddressRequired":false}'
@@ -388,6 +392,7 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         total="[[total]]"
         route="{{subroute}}"
         apple-pay-available="[[applePayAvailable]]"
+        sepa-available="[[sepaAvailable]]"
         bobpay-available="[[bobpayAvailable]]"
         g-pay-available="[[gPayAvailable]]"
         pr-available="[[prAvailable]]"></shop-checkout>

@@ -213,12 +213,9 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           <p id="desc"></p>
         </div>
         <div id="buyButtons">
-          <shop-button responsive id="addToCart" half-size$="[[_hasPaymentRequest()]]">
+          <shop-button responsive id="addToCart">
             <button on-tap="_addToCart" aria-label="Add this item to cart">Add to Cart</button>
           </shop-button>
-          <!-- <shop-button responsive id="buyNow" visible$="[[_hasPaymentRequest()]]">
-            <button on-tap="_buyNow" aria-label="Buy this item now">Buy Now</button>
-          </shop-button> -->
         </div>
       </div>
     </div>

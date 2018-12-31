@@ -17,6 +17,7 @@ const hbs = require('hbs');
 const session = require('express-session');
 const auth = require('./libs/auth');
 const webauthn = require('./libs/webauthn');
+const applepay = require('./libs/applepay');
 const common = require('./libs/common');
 const Datastore = require('@google-cloud/datastore');
 const DatastoreStore = require('@google-cloud/connect-datastore')(session);
@@ -77,6 +78,7 @@ app.set('views', './templates');
 
 app.use('/auth', auth);
 app.use('/webauthn', webauthn);
+app.use('/applepay', applepay);
 
 app.get('*', (req, res) => {
   res.render('index', {
