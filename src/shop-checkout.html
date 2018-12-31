@@ -458,31 +458,36 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
             <shop-button responsive class="inline">
               <button
                 class="creditcard-button"
-                on-tap="_proceedToCreditCard"
+                method="basic-card"
+                on-tap="_pay"
                 title="Pay with A Credit Card">Pay with A Credit Card</button>
             </shop-button>
             <shop-button responsive class="inline" hidden$="[[!gPayAvailable]]">
               <button
                 class="googlepay"
-                on-tap="_googlePaySubmit"
+                method="https://google.com/pay"
+                on-tap="_pay"
                 title="Pay with Google Pay">Pay with Google Pay</button>
             </shop-button>
             <shop-button responsive class="inline" hidden$="[[!bobpayAvailable]]">
               <button
                 class="bobpay-button"
-                on-tap="_payWithBobPay"
+                method="https://bobpay.xyz/pay"
+                on-tap="_pay"
                 title="Pay with BobPay">Pay with BobPay</button>
             </shop-button>
             <shop-button responsive class="inline" hidden$="[[!sepaAvailable]]">
               <button
                 class="sepa-button"
-                on-tap="_payWithSepa"
+                method="https://pay.mope.ml"
+                on-tap="_pay"
                 title="Pay with SEPA">Pay with SEPA</button>
             </shop-button>
             <shop-button responsive class="inline" hidden$="[[!applePayAvailable]]">
               <button
                 class="apple-pay-button"
-                on-tap="_payWithApplePay"
+                method="https://apple.com/apple-pay"
+                on-tap="_pay"
                 title="Pay with Apple Pay">Pay with Apple Pay</button>
             </shop-button>
           </section>
@@ -705,34 +710,15 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.accountData = this.$.account.byKey('account');
       }
 
-      _googlePaySubmit(e) {
+      _pay(e) {
+        e.stopPropagation();
+        const method = e.target.getAttribute('method');
+        if (!method) {
+          throw 'Payment method not specified';
+        }
         this.dispatchEvent(new CustomEvent('pay', {
           bubbles: true, composed: true, detail: {
-            method: 'https://google.com/pay'
-          }
-        }));
-      }
-
-      _payWithBobPay(e) {
-        this.dispatchEvent(new CustomEvent('pay', {
-          bubbles: true, composed: true, detail: {
-            method: 'https://bobpay.xyz/pay'
-          }
-        }));
-      }
-
-      _payWithSepa(e) {
-        this.dispatchEvent(new CustomEvent('pay', {
-          bubbles: true, composed: true, detail: {
-            method: 'https://pay.mope.ml'
-          }
-        }));
-      }
-
-      _payWithApplePay(e) {
-        this.dispatchEvent(new CustomEvent('pay', {
-          bubbles: true, composed: true, detail: {
-            method: 'https://apple.com/apple-pay'
+            method: method
           }
         }));
       }

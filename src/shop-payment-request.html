@@ -201,22 +201,23 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
               this.details, this.request.shippingAddress, resolve);
           }));
         });
-        this.request.addEventListener('merchantvalidation', e => {
-          const headers = new Headers({
-            'Content-Type': 'application/json'
+        if (methodName === 'https://apple.com/apple-pay') {
+          this.request.addEventListener('merchantvalidation', e => {
+            const headers = new Headers({
+              'Content-Type': 'application/json'
+            });
+            const promise = fetch('/applepay/validate/', {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({validationURL: e.validationURL})
+            }).then(res => {
+              if (res.status === 200) {
+                return res.json();
+              }
+            });
+            e.complete(promise);
           });
-          const promise = fetch('/applepay/validate/', {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify({validationURL: e.validationURL})
-          }).then(res => {
-            if (res.status === 200) {
-              return res.json();
-            }
-          });
-          e.complete(promise);
-        });
-
+        }
         return this.request.show()
       }
 

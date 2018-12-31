@@ -18,27 +18,17 @@ Once it's done:
 * Download `client_secret_****.json`, rename it to `client_secrets.json`
 * Place `client_secrets.json` at root of this project
 
-##### Setup
-    # Using CLI
-    mkdir shop
-    cd shop
-    polymer init shop
+You also need to set up Apple Pay and place .pem file at `/certs` directory.
 
-    # Or cloning direct from GitHub
+##### Setup
+    # Clone from GitHub
     git clone https://github.com/Polymer/shop.git
     cd shop
+    npm install
 
     # Build
-    bower install
-    git submodule init
-    git submodule update
-    pip install -t lib -r requirements.txt
-    polymer build
+    npm run build
 
 ### Start the development server
-
-    dev_appserver.py .
-
-### Build
-
-    polymer build
+    gcloud beta emulators datastore start
+    npm start

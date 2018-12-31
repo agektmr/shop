@@ -4,3 +4,4 @@ build
 client_secrets.json
 .vscode
 package-lock.json
+apple-pay-cert.pem
