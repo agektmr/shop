@@ -25,6 +25,11 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
           value: "USD"
         },
 
+        countryCode: {
+          type: String,
+          value: "US"
+        },
+
         supportedMethods: {
           type: Array,
           value: function() { return []; }
@@ -155,7 +160,8 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         this.gPayData.transactionInfo = {
           totalPriceStatus: 'FINAL',
           totalPrice: parseFloat(total.amount.value),
-          currencyCode: this.currency
+          currencyCode: this.currency,
+          countryCode: this.country
         };
         return this.gPayClient.loadPaymentData(this.gPayData);
       }
